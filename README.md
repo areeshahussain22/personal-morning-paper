@@ -250,6 +250,85 @@ model weights. Run it explicitly after installation with:
 python -m pytest tests/test_recommendation.py -m slow
 ```
 
+## LLM client layer
+
+The single LLM entry point is
+[`app/services/llm.py`](app/services/llm.py). Later features should call
+`LLMClient.generate_structured(...)`; they should not call a provider directly.
+The client wraps untrusted article text in delimited blocks, sends a guardrail
+system instruction, requests JSON/schema output where supported, and validates
+the response with Pydantic before returning it.
+
+Configured provider order defaults to:
+
+```text
+gemini,groq,openrouter,ollama
+```
+
+The implementation uses `httpx` only:
+
+- Gemini uses its native `generateContent` REST endpoint and JSON response
+  schema.
+- Groq and OpenRouter use their OpenAI-compatible `/chat/completions`
+  endpoints.
+- Ollama uses its local `/api/chat` endpoint and `format` JSON schema.
+
+The current documented model defaults are configurable and not hard-coded into
+the service logic:
+
+- Gemini: `gemini-2.5-flash` (Google AI Studio structured-output capable).
+- Groq: `llama-3.1-8b-instant` (Groq hosted low-latency model).
+- OpenRouter: `meta-llama/llama-3.3-8b-instruct:free` (free-model suffix).
+- Ollama: `llama3.2` (local model; install it with `ollama pull llama3.2`).
+
+Provider free tiers, model availability, quotas, and data-retention policies
+change. Check the current provider dashboard and official documentation before
+using a key. Create keys through Google AI Studio, the Groq console, and
+OpenRouter's account settings; Ollama does not require an API key when running
+locally. Review each provider's data policy before sending article text. The
+client never sends user names, email addresses, or user IDs.
+
+Copy the placeholders from `.env.example` into a local `.env` or configure
+PowerShell environment variables:
+
+```powershell
+$env:LLM_PROVIDER_ORDER = "gemini,groq,openrouter,ollama"
+$env:GEMINI_API_KEY = "<Google AI Studio key>"
+$env:GROQ_API_KEY = "<Groq key>"
+$env:OPENROUTER_API_KEY = "<OpenRouter key>"
+$env:GEMINI_MODEL = "gemini-2.5-flash"
+$env:GROQ_MODEL = "llama-3.1-8b-instant"
+$env:OPENROUTER_MODEL = "meta-llama/llama-3.3-8b-instruct:free"
+$env:OLLAMA_MODEL = "llama3.2"
+```
+
+Providers without a key are skipped, except local Ollama. Timeout, retry,
+global concurrency, and per-provider minimum interval settings are available
+through `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES`,
+`LLM_CONCURRENCY_LIMIT`, and `LLM_MIN_PROVIDER_INTERVAL`. Timeouts, 429s, and
+5xx responses retry with backoff and jitter before the client moves to the
+next provider. A validation failure gets one repair attempt before fallback.
+If every configured provider fails, the client raises `LLMUnavailable`; it
+never fabricates output.
+
+The supported schemas are defined in
+[`app/models/llm.py`](app/models/llm.py): `ArticleSummary`, `EditorOutput`,
+`InterestSummary`, and `OnboardingTags`. They enforce length limits, topic
+enums, no HTML/URLs in text, and supplied-ID constraints.
+
+Calls are recorded in the SQLite `llm_calls` table with provider, model,
+purpose, success, error type, latency, input size, and UTC date. Identical
+requests use the local `llm_cache` table. The daily call summary is available
+through `Database.llm_calls_per_day()` for a future budget display.
+
+Run the diagnostic command without printing secrets or generated content:
+
+```powershell
+python -m app.cli llm-check
+```
+
+It prints only the answering provider, model, latency, and attempt count.
+
 ## Run the application
 
 ```powershell
