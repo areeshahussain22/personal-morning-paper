@@ -107,6 +107,41 @@ class ProfileRepository:
                 "settings": dict(settings) if settings else {},
             }
 
+    def save_interest_summary(self, user_id: str, text: str, source: str) -> bool:
+        with self.database.connect() as db:
+            cursor = db.execute(
+                "UPDATE users SET interest_summary=?, interest_summary_source=?, interest_summary_updated_at=? WHERE user_id=?",
+                (text, source, to_db_time(utc_now()), user_id),
+            )
+        return cursor.rowcount > 0
+
+    def reset_profile(self, user_id: str) -> bool:
+        profile = self.get_profile(user_id)
+        if profile is None:
+            return False
+        baseline = json.loads(profile["settings"].get("onboarding_baseline_json", "{}"))
+        with self.database.connect() as db:
+            self._replace_preferences(
+                db, user_id, baseline.get("topic_weights", {}),
+                baseline.get("source_weights", {}), [],
+            )
+            db.execute(
+                "UPDATE users SET long_vector=?, short_vector=?, interest_summary=NULL, interest_summary_source=NULL WHERE user_id=?",
+                (json.dumps(baseline.get("long_vector")) if baseline.get("long_vector") else None,
+                 json.dumps(baseline.get("short_vector")) if baseline.get("short_vector") else None, user_id),
+            )
+            db.execute("DELETE FROM user_topic_stats WHERE user_id=?", (user_id,))
+            db.execute("UPDATE events SET processed_at=NULL WHERE user_id=?", (user_id,))
+        return True
+
+    def delete_user(self, user_id: str) -> bool:
+        with self.database.connect() as db:
+            exists = db.execute("SELECT 1 FROM users WHERE user_id=?", (user_id,)).fetchone()
+            if not exists:
+                return False
+            db.execute("DELETE FROM users WHERE user_id=?", (user_id,))
+        return True
+
     def get_preferences(self, user_id: str):
         profile = self.get_profile(user_id)
         if profile is None:

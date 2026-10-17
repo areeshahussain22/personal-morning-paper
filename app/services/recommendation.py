@@ -171,8 +171,15 @@ class RecommendationService:
                 age_hours, topics, article.get("_embedder_name"),
             )
             topic = topics[0] if topics else article["topic"]
-            code = "topic_interest" if profile.topic_weights.get(topic, 0) else "top_story"
-            text = f"Because you read about {topic}" if code == "topic_interest" else "Top story today"
+            terms = {"topic_interest": abs(components["T"]), "similarity": abs(components["E"]),
+                     "source_reliability": abs(components["S"]), "coverage": abs(components["C"])}
+            code = max(terms, key=terms.get)
+            text = {
+                "topic_interest": f"Because you read about {topic}",
+                "similarity": "Similar to stories you have read",
+                "source_reliability": f"From a source you tend to value",
+                "coverage": "Covered by several outlets",
+            }[code]
             candidates.append(ScoredArticle(article, score, components, tuple(topics), code, text))
         candidates.sort(key=lambda item: item.score, reverse=True)
         requested_size = profile.edition_size if edition_size is None else edition_size

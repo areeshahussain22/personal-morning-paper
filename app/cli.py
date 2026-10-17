@@ -12,6 +12,7 @@ from app.services.llm import LLMClient, ProviderConfig, LLMUnavailable
 from app.services.editions import EditionService, _all_items
 from app.services.recommendation import RecommendationService
 from app.services.learning import LearningProcessor
+from app.services.interest_summary import generate_interest_summary
 
 
 def build_client() -> LLMClient:
@@ -138,9 +139,19 @@ async def generate_all(use_llm: bool, force: bool) -> int:
     return 0
 
 
+async def generate_summary(user_id: str, force: bool) -> int:
+    client = build_client()
+    async with client:
+        result = await generate_interest_summary(
+            Database(get_settings().database_path), user_id, client, force
+        )
+    print(result or "user not found")
+    return 0 if result else 1
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events"])
+    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary"])
     parser.add_argument("--user-id")
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--no-llm", action="store_true")
@@ -162,6 +173,10 @@ def main() -> None:
         print(f"before={result['before']}")
         print(f"after={result['after']}")
         code = 0
+    elif args.command == "generate-summary":
+        if not args.user_id:
+            parser.error("--user-id is required for generate-summary")
+        code = asyncio.run(generate_summary(args.user_id, args.force))
     else:
         code = asyncio.run(generate_all(not args.no_llm, args.force))
     raise SystemExit(code)

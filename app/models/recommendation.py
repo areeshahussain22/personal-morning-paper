@@ -25,6 +25,7 @@ class ScoredArticle:
     topics: tuple[str, ...]
     reason_code: str
     reason_text: str
+    reason_reference: str | None = None
 
 
 @dataclass
@@ -42,6 +43,7 @@ class RecommendationResult:
                 "topics": item.topics,
                 "reason_code": item.reason_code,
                 "reason_text": item.reason_text,
+                "reason_reference": item.reason_reference,
             }
         return {
             "must_know": [serialize(item) for item in self.must_know],

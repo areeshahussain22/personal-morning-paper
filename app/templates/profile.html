@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}What your paper knows about you{% endblock %}
+{% block content %}
+<header class="edition-heading"><p class="kicker">Your profile</p><h1>What your paper knows about you</h1></header>
+<section class="card">
+  <h2>Interest summary</h2>
+  <textarea id="interest-summary" maxlength="400">{{ profile.interest_summary or "" }}</textarea>
+  <button class="primary" data-profile-action="save-summary">Save summary</button>
+  <button class="secondary" data-profile-action="regenerate-summary">Regenerate</button>
+</section>
+<section class="card"><h2>Topics</h2>
+{% for topic, weight in profile.topic_weights.items()|sort(attribute='1', reverse=true) %}
+<div class="profile-topic"><span>{{ topic }}</span><progress max="10" value="{{ [10, [0, weight]|max]|min }}"></progress><button data-topic="{{ topic }}" data-change="boost">Boost</button><button data-topic="{{ topic }}" data-change="mute">Mute</button></div>
+{% endfor %}</section>
+<section class="card"><h2>Top sources</h2>{% for source, weight in profile.source_weights.items()|sort(attribute='1', reverse=true) %}<p>{{ source }} · {{ "%.2f"|format(weight) }}</p>{% endfor %}</section>
+<section class="card profile-danger"><button data-profile-action="reset">Reset my profile</button><button data-profile-action="delete">Delete my data</button></section>
+{% endblock %}
+{% block scripts %}<script src="/static/profile.js"></script>{% endblock %}

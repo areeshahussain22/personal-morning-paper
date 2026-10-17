@@ -13,6 +13,7 @@ from app.repositories.profile_repository import ProfileRepository
 from app.services.editions import EditionService
 from app.services.embeddings import create_embedder
 from app.services.onboarding import make_tags
+from app.services.learning import LearningProcessor
 from app.services.recommendation import RecommendationService, build_profile_vector
 from app.services.topics import TOPICS
 
@@ -34,6 +35,7 @@ class OnboardingRequest(BaseModel):
     timezone: str = Field(default="UTC", min_length=1, max_length=80)
     delivery_time: str = Field(default="07:00", pattern=r"^\d{2}:\d{2}$")
     display_name: str | None = Field(default=None, max_length=120)
+    reactions: list[dict] = Field(default_factory=list, max_length=8)
 
     @field_validator("selected_topics")
     @classmethod
@@ -135,6 +137,15 @@ async def create_onboarding(
     request.session["user_id"] = user_id
     edition_date = date.today().isoformat()
     repo = ProfileRepository(Database(get_settings().database_path))
+    for reaction in payload.reactions:
+        article_id = reaction.get("article_id")
+        with Database(get_settings().database_path).connect() as db:
+            exists = article_id and db.execute(
+                "SELECT 1 FROM articles WHERE article_id=?", (article_id,)
+            ).fetchone()
+        if reaction.get("type") in {"like", "dislike"} and exists:
+            repo.record_event(user_id, reaction["type"], "onboarding", article_id=article_id)
+    LearningProcessor(Database(get_settings().database_path)).process_user(user_id)
     repo.set_generation_status(user_id, edition_date, "queued", "queued")
     background_tasks.add_task(_generate_background, user_id, edition_date)
     return {"user_id": user_id, "edition_date": edition_date}

@@ -502,3 +502,18 @@ profile signals in this phase. Events can be deleted directly from the
 `events` table by user and are retained in the local SQLite database until
 that deletion or database cleanup. Bot, prefetch, and repeated clicks inside
 the configured deduplication window are ignored.
+## Profile and interest summary
+
+Open `/profile` while signed in to review the topics and sources currently shaping
+your paper. The interest summary uses topic weights, recent clicked and disliked
+headlines, and onboarding tags. It is sent to the configured LLM without your
+name, email, user ID, or other identifiers; if no provider is available, a local
+template is used.
+
+```powershell
+.venv\Scripts\python.exe -m app.cli generate-summary --user-id USER_ID
+```
+
+The profile page supports editing or regenerating the summary, resetting learned
+preferences to the onboarding baseline, and deleting account data. Deletion
+removes the user and its cascaded editions, events, tokens, and profile records.
