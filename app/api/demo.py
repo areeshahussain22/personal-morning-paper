@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from app.core.config import get_settings
 from app.repositories.database import Database
 from app.repositories.profile_repository import ProfileRepository
-from app.services.demo import demo_database_path, demo_rows, demo_stats
+from app.services.demo import demo_database_path, demo_rows, demo_stats, demo_front_pages
 
 router = APIRouter(prefix="/demo", tags=["demo"])
 
@@ -39,7 +39,9 @@ def demo_login(persona: str, request: Request):
 def charts(request: Request):
     require_demo()
     return request.app.state.templates.TemplateResponse(
-        request=request, name="demo_charts.html", context={"rows": demo_rows(demo_db()), "simulated": True}
+        request=request, name="demo_charts.html", context={
+            "rows": demo_rows(demo_db()), "front_pages": demo_front_pages(demo_db()), "simulated": True
+        }
     )
 
 

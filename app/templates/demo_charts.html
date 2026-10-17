@@ -19,5 +19,9 @@
 {% for topic in ["technology", "sport", "world", "health", "science", "markets"] %}
 <polyline fill="none" stroke="{{ ["#0b7285", "#6741d9", "#d9480f", "#2b8a3e", "#c2255c", "#e67700"][loop.index0] }}" stroke-width="2" points="{% for row in featured %}{{ loop.index0 * 55 + 40 }},{{ 230 - ((row.topic_weights_json|from_json).get(topic, 0) + 5) * 18 }} {% endfor %}"/>
 {% endfor %}<text x="20" y="25">Weights from day 1 to day 14</text></svg></section>
-<section class="card"><h2>Front-page comparison</h2><p>Use the archive to record day 1 and day 14 front pages side by side.</p></section>
+<section class="card"><h2>Front-page comparison</h2>
+{% for persona, stories in front_pages.items() %}<h3>{{ persona }}</h3><div style="display:flex;gap:2rem">
+<div><strong>Day 1</strong>{% for story in stories if story.edition_date == stories[0].edition_date %}<p>{{ story.headline }}</p>{% endfor %}</div>
+<div><strong>Day 14</strong>{% for story in stories if story.edition_date == stories[-1].edition_date %}<p>{{ story.headline }}</p>{% endfor %}</div>
+</div>{% endfor %}</section>
 {% endblock %}

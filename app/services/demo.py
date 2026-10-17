@@ -48,6 +48,26 @@ def demo_rows(database: Database) -> list[dict]:
         )]
 
 
+def demo_front_pages(database: Database) -> dict[str, list[dict]]:
+    with database.connect() as connection:
+        rows = connection.execute(
+            "SELECT u.name, e.edition_date, a.headline FROM editions e "
+            "JOIN users u ON u.user_id=e.user_id "
+            "JOIN edition_items ei ON ei.edition_id=e.edition_id "
+            "JOIN articles a ON a.article_id=ei.article_id "
+            "WHERE u.name LIKE 'simulated-%' ORDER BY u.name, e.edition_date, ei.position"
+        )
+        grouped: dict[str, list[dict]] = {}
+        for row in rows:
+            grouped.setdefault(row["name"].removeprefix("simulated-"), []).append(dict(row))
+        return {
+            persona: [item for item in items if item["edition_date"] in {
+                items[0]["edition_date"], items[-1]["edition_date"]
+            }]
+            for persona, items in grouped.items()
+        }
+
+
 def demo_stats(database: Database) -> dict:
     with database.connect() as connection:
         llm = [dict(row) for row in connection.execute(
