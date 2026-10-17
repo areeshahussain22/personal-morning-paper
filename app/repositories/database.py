@@ -72,6 +72,70 @@ class Database:
                     article_count INTEGER NOT NULL,
                     articles_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    editions_read INTEGER NOT NULL DEFAULT 0,
+                    long_vector TEXT,
+                    short_vector TEXT
+                );
+                CREATE TABLE IF NOT EXISTS user_topic_preferences (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    topic TEXT NOT NULL,
+                    weight REAL NOT NULL,
+                    PRIMARY KEY (user_id, topic)
+                );
+                CREATE TABLE IF NOT EXISTS user_source_preferences (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    source_id TEXT NOT NULL,
+                    weight REAL NOT NULL,
+                    PRIMARY KEY (user_id, source_id)
+                );
+                CREATE TABLE IF NOT EXISTS user_muted_topics (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    topic TEXT NOT NULL,
+                    PRIMARY KEY (user_id, topic)
+                );
+                CREATE TABLE IF NOT EXISTS article_topics (
+                    article_id TEXT NOT NULL REFERENCES articles(article_id) ON DELETE CASCADE,
+                    topic TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    PRIMARY KEY (article_id, topic)
+                );
+                CREATE TABLE IF NOT EXISTS article_embeddings (
+                    article_id TEXT PRIMARY KEY REFERENCES articles(article_id) ON DELETE CASCADE,
+                    dimensions INTEGER NOT NULL,
+                    vector_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS article_clusters (
+                    article_id TEXT PRIMARY KEY REFERENCES articles(article_id) ON DELETE CASCADE,
+                    cluster_id TEXT NOT NULL,
+                    cluster_size INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS editions (
+                    edition_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    result_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS edition_articles (
+                    edition_id TEXT NOT NULL REFERENCES editions(edition_id) ON DELETE CASCADE,
+                    article_id TEXT NOT NULL REFERENCES articles(article_id),
+                    selection_group TEXT NOT NULL,
+                    reason_code TEXT NOT NULL,
+                    PRIMARY KEY (edition_id, article_id)
+                );
+                CREATE TABLE IF NOT EXISTS interactions (
+                    interaction_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    article_id TEXT NOT NULL REFERENCES articles(article_id),
+                    event_type TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_edition_user_created ON editions(user_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics(topic);
                 """
             )
 

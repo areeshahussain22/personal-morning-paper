@@ -12,6 +12,9 @@ class Settings:
     request_timeout_seconds: float = 15.0
     max_retries: int = 2
     max_concurrent_feeds: int = 4
+    recommendation_edition_size: int = 10
+    topic_match_threshold: float = 0.12
+    embedding_dimensions: int = 64
 
 
 def get_settings() -> Settings:
