@@ -9,6 +9,9 @@ from app.repositories.profile_repository import ProfileRepository
 from app.services.embeddings import create_embedder
 from app.services.recommendation import RecommendationService, build_profile_vector
 from app.services.topics import TOPICS
+from app.services.editions import EditionService
+from app.cli import build_client
+from datetime import date
 
 router = APIRouter(prefix="/api", tags=["recommendations"])
 
@@ -122,4 +125,55 @@ def latest_recommendations(user_id: str) -> dict:
     result = repo.latest_edition(user_id)
     if result is None:
         raise HTTPException(status_code=404, detail="No recommendation edition found")
+    return result
+
+
+def edition_service(use_llm: bool) -> tuple[EditionService, object | None]:
+    settings = get_settings()
+    database = Database(settings.database_path)
+    profile_service = RecommendationService(
+        database,
+        freshness_hours=settings.freshness_hours,
+        topic_threshold=settings.real_topic_match_threshold
+        if settings.embedding_backend == "sentence_transformer"
+        else settings.topic_match_threshold,
+        dimensions=settings.embedding_dimensions,
+    )
+    client = build_client() if use_llm else None
+    return EditionService(database, profile_service, client), client
+
+
+@router.post("/users/{user_id}/editions/generate")
+async def generate_edition(
+    user_id: str,
+    edition_date: date | None = None,
+    force: bool = False,
+    use_llm: bool = True,
+) -> dict:
+    service, client = edition_service(use_llm)
+    try:
+        if client is not None:
+            async with client:
+                return await service.generate(user_id, edition_date or date.today(), force, use_llm)
+        return await service.generate(user_id, edition_date or date.today(), force, use_llm)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/users/{user_id}/editions")
+def list_editions(user_id: str) -> list[dict]:
+    repo = repository()
+    if repo.get_profile(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return repo.list_editions(user_id)
+
+
+@router.get("/users/{user_id}/editions/{edition_date}")
+def get_edition(user_id: str, edition_date: date) -> dict:
+    repo = repository()
+    if repo.get_profile(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    result = repo.edition_for_date(user_id, edition_date.isoformat())
+    if result is None:
+        raise HTTPException(status_code=404, detail="Edition not found")
     return result

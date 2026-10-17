@@ -329,6 +329,44 @@ python -m app.cli llm-check
 
 It prints only the answering provider, model, latency, and attempt count.
 
+## Edition generation
+
+Edition generation turns one recommendation selection into a persisted
+newspaper. `EditionService` first runs the existing must-know, exploration,
+and regular selection, then summarizes only selected articles whose `summary`
+column is empty. Summaries are cached on the article by canonical URL through
+the article row: LLM summaries record `summary_source=llm` plus provider and
+model metadata, while the deterministic fallback stores sanitized RSS
+sentences with `summary_source=snippet`.
+
+The editor receives only the selected article IDs, headlines, summaries,
+scores, selection flags, and code-generated reason codes. Its output is
+validated so every selected story appears exactly once and the lead is among
+the five highest-scoring stories. Invalid or unavailable LLM output uses the
+code layout: the highest-score story is the lead, sections are topic groups
+ordered by total score, and original headlines and reason text are retained.
+The saved edition includes `layout_source` (`llm` or `code`), provider/model
+metadata, stage timings, score components, reason codes, and reading
+positions starting at 1.
+
+Generate an edition without any network or API key:
+
+```powershell
+python -m app.cli generate-edition --user-id <USER_ID> --no-llm
+```
+
+With configured providers, omit `--no-llm`. Use `--date YYYY-MM-DD` and
+`--force` to regenerate an existing date. The HTTP API equivalents are:
+
+```text
+POST /api/users/{user_id}/editions/generate?use_llm=false
+GET  /api/users/{user_id}/editions
+GET  /api/users/{user_id}/editions/{YYYY-MM-DD}
+```
+
+`generate-all` iterates over every stored user and supports `--no-llm` and
+`--force`. Edition generation is idempotent for a user/date unless forced.
+
 ## Run the application
 
 ```powershell
