@@ -15,6 +15,12 @@ class Settings:
     recommendation_edition_size: int = 10
     topic_match_threshold: float = 0.12
     embedding_dimensions: int = 64
+    embedding_backend: str = "sentence_transformer"
+    embedding_allow_fallback: bool = False
+    cluster_window_hours: int = 36
+    cluster_similarity_threshold: float = 0.72
+    hashed_cluster_similarity_threshold: float = 0.45
+    real_topic_match_threshold: float = 0.45
 
 
 def get_settings() -> Settings:
@@ -29,4 +35,10 @@ def get_settings() -> Settings:
         recommendation_edition_size=int(os.getenv("RECOMMENDATION_EDITION_SIZE", "10")),
         topic_match_threshold=float(os.getenv("TOPIC_MATCH_THRESHOLD", "0.12")),
         embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "64")),
+        embedding_backend=os.getenv("EMBEDDING_BACKEND", "sentence_transformer"),
+        embedding_allow_fallback=os.getenv("EMBEDDING_ALLOW_FALLBACK", "false").lower() == "true",
+        cluster_window_hours=int(os.getenv("CLUSTER_WINDOW_HOURS", "36")),
+        cluster_similarity_threshold=float(os.getenv("CLUSTER_SIMILARITY_THRESHOLD", "0.72")),
+        hashed_cluster_similarity_threshold=float(os.getenv("HASHED_CLUSTER_SIMILARITY_THRESHOLD", "0.45")),
+        real_topic_match_threshold=float(os.getenv("REAL_TOPIC_MATCH_THRESHOLD", "0.45")),
     )
