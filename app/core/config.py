@@ -42,6 +42,13 @@ class Settings:
     pdf_image_max_bytes: int = 2 * 1024 * 1024
     event_click_dedupe_seconds: int = 30
     event_rate_limit_per_minute: int = 60
+    learning_decay: float = 0.97
+    learning_cutoff_hours: int = 24
+    learning_min_long_read_seconds: int = 30
+    learning_bounce_seconds: int = 8
+    exploration_base: float = 0.40
+    exploration_decay: float = 0.05
+    exploration_top_topics: int = 3
 
 
 def _load_local_env() -> None:
@@ -103,4 +110,11 @@ def get_settings() -> Settings:
         pdf_image_max_bytes=int(os.getenv("PDF_IMAGE_MAX_BYTES", str(2 * 1024 * 1024))),
         event_click_dedupe_seconds=int(os.getenv("EVENT_CLICK_DEDUPE_SECONDS", "30")),
         event_rate_limit_per_minute=int(os.getenv("EVENT_RATE_LIMIT_PER_MINUTE", "60")),
+        learning_decay=float(os.getenv("LEARNING_DECAY", "0.97")),
+        learning_cutoff_hours=int(os.getenv("LEARNING_CUTOFF_HOURS", "24")),
+        learning_min_long_read_seconds=int(os.getenv("LEARNING_MIN_LONG_READ_SECONDS", "30")),
+        learning_bounce_seconds=int(os.getenv("LEARNING_BOUNCE_SECONDS", "8")),
+        exploration_base=float(os.getenv("EXPLORATION_BASE", "0.40")),
+        exploration_decay=float(os.getenv("EXPLORATION_DECAY", "0.05")),
+        exploration_top_topics=int(os.getenv("EXPLORATION_TOP_TOPICS", "3")),
     )

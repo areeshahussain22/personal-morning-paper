@@ -106,12 +106,14 @@ class Database:
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                     topic TEXT NOT NULL,
                     weight REAL NOT NULL,
+                    updated_at TEXT,
                     PRIMARY KEY (user_id, topic)
                 );
                 CREATE TABLE IF NOT EXISTS user_source_preferences (
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                     source_id TEXT NOT NULL,
                     weight REAL NOT NULL,
+                    updated_at TEXT,
                     PRIMARY KEY (user_id, source_id)
                 );
                 CREATE TABLE IF NOT EXISTS user_muted_topics (
@@ -185,6 +187,14 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_user_time ON events(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_events_impression ON events(user_id, edition_id, article_id, type);
+                CREATE TABLE IF NOT EXISTS user_topic_stats (
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    topic TEXT NOT NULL,
+                    views INTEGER NOT NULL DEFAULT 0,
+                    clicks INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT,
+                    PRIMARY KEY (user_id, topic)
+                );
                 CREATE INDEX IF NOT EXISTS idx_edition_user_created ON editions(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics(topic);
                 CREATE TABLE IF NOT EXISTS llm_calls (
@@ -239,6 +249,8 @@ class Database:
             self._add_column_if_missing(connection, "editions", "pdf_path", "TEXT")
             self._add_column_if_missing(connection, "editions", "pdf_rendered_at", "TEXT")
             self._add_column_if_missing(connection, "link_tokens", "token_source", "TEXT NOT NULL DEFAULT 'web'")
+            self._add_column_if_missing(connection, "user_topic_preferences", "updated_at", "TEXT")
+            self._add_column_if_missing(connection, "user_source_preferences", "updated_at", "TEXT")
             connection.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_editions_user_date ON editions(user_id, edition_date)"
             )

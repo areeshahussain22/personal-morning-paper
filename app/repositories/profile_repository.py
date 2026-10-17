@@ -34,8 +34,12 @@ class ProfileRepository:
             profile_settings = settings or {}
             baseline = {
                 "topic_weights": topic_weights,
+                "source_weights": source_weights,
                 "selected_sub_interests": selected_sub_interests or [],
                 "interest_tags": interest_tags or [],
+                "long_vector": vector,
+                "short_vector": vector,
+                "embedder_name": embedder_name,
             }
             db.execute(
                 """INSERT INTO user_settings
@@ -60,10 +64,10 @@ class ProfileRepository:
         db.execute("DELETE FROM user_topic_preferences WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM user_source_preferences WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM user_muted_topics WHERE user_id = ?", (user_id,))
-        db.executemany("INSERT INTO user_topic_preferences VALUES (?, ?, ?)",
-                       [(user_id, key, float(value)) for key, value in topics.items()])
-        db.executemany("INSERT INTO user_source_preferences VALUES (?, ?, ?)",
-                       [(user_id, key, float(value)) for key, value in sources.items()])
+        db.executemany("INSERT INTO user_topic_preferences (user_id, topic, weight, updated_at) VALUES (?, ?, ?, ?)",
+                       [(user_id, key, float(value), to_db_time(utc_now())) for key, value in topics.items()])
+        db.executemany("INSERT INTO user_source_preferences (user_id, source_id, weight, updated_at) VALUES (?, ?, ?, ?)",
+                       [(user_id, key, float(value), to_db_time(utc_now())) for key, value in sources.items()])
         db.executemany("INSERT INTO user_muted_topics VALUES (?, ?)", [(user_id, topic) for topic in muted])
 
     def update_preferences(self, user_id: str, topics: dict, sources: dict, muted: list[str]) -> bool:
@@ -87,14 +91,16 @@ class ProfileRepository:
             user = db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
             if user is None:
                 return None
-            topics = db.execute("SELECT topic, weight FROM user_topic_preferences WHERE user_id = ?", (user_id,)).fetchall()
-            sources = db.execute("SELECT source_id, weight FROM user_source_preferences WHERE user_id = ?", (user_id,)).fetchall()
+            topics = db.execute("SELECT topic, weight, updated_at FROM user_topic_preferences WHERE user_id = ?", (user_id,)).fetchall()
+            sources = db.execute("SELECT source_id, weight, updated_at FROM user_source_preferences WHERE user_id = ?", (user_id,)).fetchall()
             muted = db.execute("SELECT topic FROM user_muted_topics WHERE user_id = ?", (user_id,)).fetchall()
             settings = db.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,)).fetchone()
             return {
                 **dict(user),
                 "topic_weights": {row["topic"]: row["weight"] for row in topics},
                 "source_weights": {row["source_id"]: row["weight"] for row in sources},
+                "topic_updated_at": {row["topic"]: row["updated_at"] for row in topics},
+                "source_updated_at": {row["source_id"]: row["updated_at"] for row in sources},
                 "muted_topics": [row["topic"] for row in muted],
                 "vector_embedder": user["vector_embedder"],
                 "vector_dimension": user["vector_dimension"],
@@ -365,6 +371,31 @@ class ProfileRepository:
                 "WHERE user_id=? AND edition_date=?", (user_id, edition_date)
             ).fetchone()
         return dict(row) if row else None
+
+    def learning_state(self, user_id: str) -> dict | None:
+        profile = self.get_profile(user_id)
+        if profile is None:
+            return None
+        with self.database.connect() as db:
+            stats = db.execute(
+                "SELECT topic, views, clicks, updated_at FROM user_topic_stats WHERE user_id=?",
+                (user_id,),
+            ).fetchall()
+        long_vector = json.loads(profile["long_vector"]) if profile["long_vector"] else []
+        short_vector = json.loads(profile["short_vector"]) if profile["short_vector"] else []
+        norm = lambda values: sum(float(value) ** 2 for value in values) ** 0.5
+        return {
+            "user_id": user_id,
+            "topic_weights": profile["topic_weights"],
+            "source_weights": profile["source_weights"],
+            "topic_stats": {row["topic"]: dict(row) for row in stats},
+            "vector_norms": {"long": norm(long_vector), "short": norm(short_vector)},
+            "last_update": max(
+                [v for v in profile["topic_updated_at"].values() if v]
+                + [v for v in profile["source_updated_at"].values() if v]
+                or [None]
+            ),
+        }
 
     def list_editions(self, user_id: str) -> list[dict]:
         with self.database.connect() as db:

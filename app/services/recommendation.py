@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
@@ -45,6 +46,15 @@ def score_article(
 
 def exploration_share(editions_read: int, floor: float = 0.15) -> float:
     return max(floor, 0.40 - 0.05 * max(0, editions_read))
+
+
+def exploration_draws(user_id: str, edition_date: str, stats: dict[str, dict]) -> dict[str, float]:
+    rng = random.Random(f"{user_id}:{edition_date}")
+    return {
+        topic: rng.betavariate(1 + int(values.get("clicks", 0)),
+                               1 + max(int(values.get("views", 0)) - int(values.get("clicks", 0)), 0))
+                               for topic, values in stats.items()
+    }
 
 
 def title_similarity(left: str, right: str) -> float:
@@ -139,7 +149,8 @@ class RecommendationService:
             )}
 
     def preview(
-        self, user_id: str, profile: ProfilePreferences, edition_size: int | None = None
+        self, user_id: str, profile: ProfilePreferences, edition_size: int | None = None,
+        edition_date: str | None = None,
     ) -> RecommendationResult:
         candidates: list[ScoredArticle] = []
         now = utc_now()
@@ -174,8 +185,31 @@ class RecommendationService:
             max(0, edition_size - len(must_know)),
             round(edition_size * exploration_share(profile.editions_read, profile.exploration_floor)),
         )
-        outside = [item for item in remaining if not set(item.topics) & set(sorted(profile.topic_weights, key=profile.topic_weights.get, reverse=True)[:3])]
-        exploration = [self._with_reason(item, "exploration", f"Something new: {item.topics[0] if item.topics else item.article['topic']}") for item in outside[:exploration_count]]
+        top_topics = set(sorted(profile.topic_weights, key=profile.topic_weights.get, reverse=True)[:3])
+        outside = [item for item in remaining if not set(item.topics) & top_topics]
+        with self.database.connect() as db:
+            stat_rows = db.execute(
+                "SELECT topic, views, clicks FROM user_topic_stats WHERE user_id=?", (user_id,)
+            ).fetchall()
+        stats = {row["topic"]: dict(row) for row in stat_rows}
+        draws = exploration_draws(user_id, edition_date or utc_now().date().isoformat(), stats)
+        best_by_topic: dict[str, ScoredArticle] = {}
+        for item in outside:
+            topic = item.topics[0] if item.topics else item.article["topic"]
+            if topic not in best_by_topic or item.score > best_by_topic[topic].score:
+                best_by_topic[topic] = item
+        exploration_candidates = sorted(
+            best_by_topic.values(),
+            key=lambda item: (
+                draws.get(item.topics[0] if item.topics else item.article["topic"], 0.0),
+                item.score,
+            ),
+            reverse=True,
+        )
+        exploration = [
+            self._with_reason(item, "exploration", f"Something new: {item.topics[0] if item.topics else item.article['topic']}")
+            for item in exploration_candidates[:exploration_count]
+        ]
         selected_ids.update(item.article["article_id"] for item in exploration)
         regular = self._mmr([item for item in remaining if item.article["article_id"] not in selected_ids], edition_size - len(must_know) - len(exploration), selected_ids)
         return RecommendationResult(must_know, exploration, regular)

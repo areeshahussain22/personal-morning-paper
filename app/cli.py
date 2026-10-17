@@ -11,6 +11,7 @@ from app.repositories.database import Database
 from app.services.llm import LLMClient, ProviderConfig, LLMUnavailable
 from app.services.editions import EditionService, _all_items
 from app.services.recommendation import RecommendationService
+from app.services.learning import LearningProcessor
 
 
 def build_client() -> LLMClient:
@@ -139,12 +140,13 @@ async def generate_all(use_llm: bool, force: bool) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all"])
+    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events"])
     parser.add_argument("--user-id")
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--no-llm", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--provider", choices=["gemini", "groq", "openrouter", "ollama"])
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.command == "llm-check":
         code = asyncio.run(llm_check(args.provider))
@@ -152,6 +154,14 @@ def main() -> None:
         if not args.user_id:
             parser.error("--user-id is required for generate-edition")
         code = asyncio.run(generate_edition(args.user_id, args.date, not args.no_llm, args.force))
+    elif args.command == "process-events":
+        if not args.user_id:
+            parser.error("--user-id is required for process-events")
+        result = LearningProcessor(Database(get_settings().database_path)).process_user(args.user_id, args.dry_run)
+        print(f"processed={result['processed']}")
+        print(f"before={result['before']}")
+        print(f"after={result['after']}")
+        code = 0
     else:
         code = asyncio.run(generate_all(not args.no_llm, args.force))
     raise SystemExit(code)

@@ -10,6 +10,7 @@ from app.services.embeddings import create_embedder
 from app.services.recommendation import RecommendationService, build_profile_vector
 from app.services.pdf import build_pdf
 from app.services.topics import TOPICS
+from app.services.learning import LearningProcessor
 from app.services.editions import EditionService
 from app.cli import build_client
 from datetime import date
@@ -173,6 +174,15 @@ def list_editions(user_id: str) -> list[dict]:
     if repo.get_profile(user_id) is None:
         raise HTTPException(status_code=404, detail="User not found")
     return repo.list_editions(user_id)
+
+
+@router.get("/users/{user_id}/learning/state")
+def learning_state(user_id: str) -> dict:
+    repo = repository()
+    state = repo.learning_state(user_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return state
 
 
 @router.get("/users/{user_id}/editions/{edition_date}")

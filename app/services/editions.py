@@ -12,6 +12,7 @@ from app.repositories.database import Database
 from app.repositories.profile_repository import ProfileRepository
 from app.services.llm import LLMClient, LLMUnavailable, LLMValidationError
 from app.services.recommendation import RecommendationService
+from app.services.learning import LearningProcessor
 
 
 def _clean_snippet(value: str | None) -> str:
@@ -45,6 +46,7 @@ class EditionService:
         self.recommendation = recommendation
         self.llm_client = llm_client
         self.profiles = ProfileRepository(database)
+        self.learning = LearningProcessor(database)
 
     def _summary_rows(self, article_ids: set[str]) -> dict[str, dict[str, Any]]:
         if not article_ids:
@@ -153,7 +155,9 @@ class EditionService:
         profile = self.profiles.get_preferences(user_id)
         if profile is None:
             raise LookupError("User not found")
-        recommendation = self.recommendation.preview(user_id, profile)
+        self.learning.process_user(user_id)
+        profile = self.profiles.get_preferences(user_id)
+        recommendation = self.recommendation.preview(user_id, profile, edition_date=edition_date)
         selected = _all_items(recommendation)
         rows, _, _ = await self.ensure_summaries([item for _, item in selected])
         selected_ids = {item.article["article_id"] for _, item in selected}
