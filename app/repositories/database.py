@@ -136,6 +136,24 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_edition_user_created ON editions(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics(topic);
+                CREATE TABLE IF NOT EXISTS llm_calls (
+                    call_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    purpose TEXT NOT NULL,
+                    success INTEGER NOT NULL,
+                    error_type TEXT,
+                    latency_ms INTEGER NOT NULL,
+                    input_size INTEGER NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_llm_calls_created ON llm_calls(created_at);
+                CREATE INDEX IF NOT EXISTS idx_llm_calls_purpose_provider ON llm_calls(purpose, provider);
+                CREATE TABLE IF NOT EXISTS llm_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    response_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
                 """
             )
             self._add_column_if_missing(connection, "users", "vector_embedder", "TEXT")
@@ -147,6 +165,40 @@ class Database:
         columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
             connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    def log_llm_call(
+        self, provider: str, model: str, purpose: str, success: bool,
+        error_type: str | None, latency_ms: int, input_size: int,
+    ) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """INSERT INTO llm_calls
+                   (provider, model, purpose, success, error_type, latency_ms, input_size, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (provider, model, purpose, int(success), error_type, latency_ms, input_size, to_db_time(utc_now())),
+            )
+
+    def llm_calls_per_day(self) -> list[sqlite3.Row]:
+        with self.connect() as connection:
+            return list(connection.execute(
+                """SELECT substr(created_at, 1, 10) AS day, purpose, provider,
+                   COUNT(*) AS calls, SUM(success) AS successes
+                   FROM llm_calls GROUP BY day, purpose, provider ORDER BY day DESC"""
+            ))
+
+    def read_llm_cache(self, cache_key: str) -> dict | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT response_json FROM llm_cache WHERE cache_key = ?", (cache_key,)
+            ).fetchone()
+        return json.loads(row["response_json"]) if row else None
+
+    def write_llm_cache(self, cache_key: str, response: dict) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO llm_cache (cache_key, response_json, created_at) VALUES (?, ?, ?)",
+                (cache_key, json.dumps(response), to_db_time(utc_now())),
+            )
 
     def upsert_source(self, source: Any) -> None:
         with self.connect() as connection:
