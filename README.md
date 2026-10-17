@@ -544,3 +544,21 @@ Each run is recorded in the `job_runs` table with its key, status, timestamps,
 error, and JSON statistics. Jobs coalesce missed intervals, allow one instance
 at a time, and isolate reader failures. The development-only `/api/admin/jobs`
 endpoint requires the configured `ADMIN_TOKEN`.
+
+## Demo mode
+
+Demo routes are available only when `DEMO_MODE=true`. Build the isolated demo
+database and local SVG/CSV exports with:
+
+```powershell
+.venv\Scripts\python.exe -m app.cli seed-demo
+.venv\Scripts\python.exe -m app.cli export-demo
+$env:DEMO_MODE="true"; $env:DATABASE_URL="out\demo\sim.db"
+.venv\Scripts\python.exe -m uvicorn app.main:app
+```
+
+Then open `/demo/charts`, `/demo/stats`, or `/demo/login/featured`.
+`scripts/demo.ps1` and `scripts/demo.sh` automate the setup and server start.
+The demo uses server-rendered SVG charts and simulated data only; generated
+files are under ignored `out/demo/`. `scripts/capture_screens.py` optionally
+captures the chart and stats pages at 1920x1080 when Playwright is installed.

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Demo charts{% endblock %}
+{% block content %}
+<div class="card"><strong>Simulated data</strong><p>These charts show deterministic simulated reader behavior, not production readers.</p></div>
+<h1>Learning over 14 days</h1>
+{% for persona in ["featured", "health_science", "markets_world"] %}
+<section class="card"><h2>{{ persona }}</h2><svg viewBox="0 0 900 260" role="img" aria-label="{{ persona }} click-through rate">
+<polyline fill="none" stroke="#0b7285" stroke-width="3" points="{% for row in rows if row.persona == persona %}{{ loop.index0 * 55 + 40 }},{{ 230 - (row.metrics_json|from_json).click_through_rate * 180 }} {% endfor %}"/>
+<text x="20" y="25">Click-through rate</text></svg>
+<svg viewBox="0 0 900 260" role="img" aria-label="{{ persona }} average clicked position">
+<polyline fill="none" stroke="#6741d9" stroke-width="3" points="{% for row in rows if row.persona == persona %}{{ loop.index0 * 55 + 40 }},{{ 230 - ((row.metrics_json|from_json).average_clicked_position|default(0)) * 30 }} {% endfor %}"/>
+<text x="20" y="25">Average clicked position</text></svg>
+<svg viewBox="0 0 900 260" role="img" aria-label="{{ persona }} top five hit rate">
+<polyline fill="none" stroke="#d9480f" stroke-width="3" points="{% for row in rows if row.persona == persona %}{{ loop.index0 * 55 + 40 }},{{ 230 - (row.metrics_json|from_json).top5_hit_rate * 180 }} {% endfor %}"/>
+<text x="20" y="25">Top-five hit rate</text></svg></section>
+{% endfor %}
+<section class="card"><h2>Featured topic weights</h2><svg viewBox="0 0 900 260" role="img" aria-label="Featured topic weights">
+{% set featured = rows|selectattr("persona", "equalto", "featured")|list %}
+{% for topic in ["technology", "sport", "world", "health", "science", "markets"] %}
+<polyline fill="none" stroke="{{ ["#0b7285", "#6741d9", "#d9480f", "#2b8a3e", "#c2255c", "#e67700"][loop.index0] }}" stroke-width="2" points="{% for row in featured %}{{ loop.index0 * 55 + 40 }},{{ 230 - ((row.topic_weights_json|from_json).get(topic, 0) + 5) * 18 }} {% endfor %}"/>
+{% endfor %}<text x="20" y="25">Weights from day 1 to day 14</text></svg></section>
+<section class="card"><h2>Front-page comparison</h2><p>Use the archive to record day 1 and day 14 front pages side by side.</p></section>
+{% endblock %}

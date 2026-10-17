@@ -16,6 +16,7 @@ from app.services.recommendation import RecommendationService
 from app.services.learning import LearningProcessor
 from app.services.interest_summary import generate_interest_summary
 from app.services.simulation import SimulationRunner
+from app.services.demo import seed_demo, demo_database_path, export_demo
 
 
 def build_client() -> LLMClient:
@@ -165,7 +166,7 @@ def simulate(days: int, persona: str, seed: int, cycle: bool, llm_featured: bool
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary", "scheduler", "run-once", "status", "simulate"])
+    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary", "scheduler", "run-once", "status", "simulate", "seed-demo", "export-demo"])
     parser.add_argument("--user-id")
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--no-llm", action="store_true")
@@ -177,6 +178,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cycle", action="store_true")
     parser.add_argument("--llm-featured", action="store_true")
+    parser.add_argument("--output-dir", default="out/demo")
     args = parser.parse_args()
     if args.command == "llm-check":
         code = asyncio.run(llm_check(args.provider))
@@ -215,6 +217,15 @@ def main() -> None:
         code = 0
     elif args.command == "simulate":
         code = simulate(args.days, args.persona, args.seed, args.cycle, args.llm_featured)
+    elif args.command == "seed-demo":
+        result = seed_demo(Database(get_settings().database_path), args.output_dir)
+        print(f"database={demo_database_path(args.output_dir)}")
+        print(f"days={len(result['days'])}")
+        code = 0
+    elif args.command == "export-demo":
+        database = Database(args.output_dir + "/sim.db")
+        print(json.dumps(export_demo(database, args.output_dir)))
+        code = 0
     else:
         code = asyncio.run(generate_all(not args.no_llm, args.force, args.date))
     raise SystemExit(code)

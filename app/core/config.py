@@ -54,6 +54,7 @@ class Settings:
     scheduler_misfire_grace_seconds: int = 900
     scheduler_max_workers: int = 4
     admin_token: str | None = None
+    demo_mode: bool = False
 
 
 def _load_local_env() -> None:
@@ -75,7 +76,7 @@ def get_settings() -> Settings:
     _load_local_env()
     return Settings(
         database_path=Path(
-            os.getenv("DATABASE_PATH", "data/personal_morning_paper.db")
+            os.getenv("DATABASE_URL", os.getenv("DATABASE_PATH", "data/personal_morning_paper.db"))
         ),
         freshness_hours=int(os.getenv("FRESHNESS_HOURS", "48")),
         request_timeout_seconds=float(os.getenv("RSS_TIMEOUT_SECONDS", "15")),
@@ -127,4 +128,5 @@ def get_settings() -> Settings:
         scheduler_misfire_grace_seconds=int(os.getenv("SCHEDULER_MISFIRE_GRACE_SECONDS", "900")),
         scheduler_max_workers=int(os.getenv("SCHEDULER_MAX_WORKERS", "4")),
         admin_token=os.getenv("ADMIN_TOKEN"),
+        demo_mode=os.getenv("DEMO_MODE", "false").lower() == "true",
     )

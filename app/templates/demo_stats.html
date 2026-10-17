@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Demo stats{% endblock %}
+{% block content %}
+<div class="card"><strong>Simulated data</strong><h1>Recording statistics</h1>
+<p>Articles in pool: {{ stats.articles }}</p><p>Clusters: {{ stats.clusters }}</p>
+<h2>LLM calls</h2>{% for row in stats.llm_calls %}<p>{{ row.provider }} · {{ row.purpose }} · {{ row.count }}</p>{% else %}<p>No LLM calls were used.</p>{% endfor %}
+<h2>Feeds</h2><p>{{ stats.feeds|join(", ") }}</p>
+<p>Average generation time: {{ stats.average_generation_ms|round(1) }} ms</p>
+<p>Summary cache hits: {{ stats.summary_cache_hits }}</p></div>
+{% endblock %}

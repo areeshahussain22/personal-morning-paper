@@ -14,6 +14,7 @@ from app.api.recommendations import router as recommendations_router
 from app.api.events import router as events_router
 from app.api.profile import router as profile_router
 from app.api.jobs import router as jobs_router
+from app.api.demo import router as demo_router
 from app.core.config import get_settings
 from app.core.logging import configure_http_logging
 from app.repositories.database import Database
@@ -44,6 +45,7 @@ app.include_router(onboarding_router)
 app.include_router(events_router)
 app.include_router(profile_router)
 app.include_router(jobs_router)
+app.include_router(demo_router)
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 app.state.templates = templates
@@ -65,6 +67,7 @@ def _relative_time(value: str | None) -> str:
 
 
 templates.env.filters["relative_time"] = _relative_time
+templates.env.filters["from_json"] = lambda value: __import__("json").loads(value)
 
 
 def _repo() -> ProfileRepository:
