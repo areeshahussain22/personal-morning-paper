@@ -61,6 +61,21 @@ class ProviderConfig:
     base_url: str
 
 
+def _gemini_schema(schema: dict) -> dict:
+    unsupported = {"title", "additionalProperties", "minLength", "maxLength"}
+    return {
+        key: (
+            [_gemini_schema(item) if isinstance(item, dict) else item for item in value]
+            if isinstance(value, list)
+            else _gemini_schema(value)
+            if isinstance(value, dict)
+            else value
+        )
+        for key, value in schema.items()
+        if key not in unsupported
+    }
+
+
 def wrap_untrusted_blocks(blocks: list[dict[str, str]]) -> str:
     return "\n".join(
         f"<article id='{block['id']}'>\n{block['text']}\n</article>"
@@ -220,7 +235,10 @@ class LLMClient:
             payload = {
                 "system_instruction": {"parts": [{"text": system_prompt}]},
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json", "responseSchema": schema},
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "responseSchema": _gemini_schema(schema),
+                },
             }
             response = await self._client.post(
                 url, headers={"x-goog-api-key": provider.api_key or ""}, json=payload
