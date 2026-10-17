@@ -124,9 +124,11 @@ class RecommendationService:
         article["_embedder_name"] = self.embedder.name
         return article, topics, embedding
 
-    def _eligible_rows(self, profile: ProfilePreferences, user_id: str) -> list[dict]:
+    def _eligible_rows(
+        self, profile: ProfilePreferences, user_id: str, exclude_edition_id: str | None = None
+    ) -> list[dict]:
         cutoff = utc_now() - timedelta(hours=self.freshness_hours)
-        displayed = self._displayed_ids(user_id)
+        displayed = self._displayed_ids(user_id, exclude_edition_id)
         with self.database.connect() as db:
             rows = db.execute(
                 """SELECT a.*, s.reliability_score FROM articles a JOIN sources s ON s.source_id = a.source_id
@@ -141,20 +143,28 @@ class RecommendationService:
                 result.append(item)
         return result
 
-    def _displayed_ids(self, user_id: str) -> set[str]:
+    def _displayed_ids(self, user_id: str, exclude_edition_id: str | None = None) -> set[str]:
         with self.database.connect() as db:
-            return {row["article_id"] for row in db.execute(
-                """SELECT ea.article_id FROM edition_articles ea JOIN editions e ON e.edition_id = ea.edition_id
-                   WHERE e.user_id = ? ORDER BY e.created_at DESC LIMIT 7""", (user_id,)
-            )}
+            if exclude_edition_id:
+                rows = db.execute(
+                    """SELECT ea.article_id FROM edition_articles ea JOIN editions e ON e.edition_id = ea.edition_id
+                       WHERE e.user_id = ? AND e.edition_id != ? ORDER BY e.created_at DESC LIMIT 7""",
+                    (user_id, exclude_edition_id),
+                )
+            else:
+                rows = db.execute(
+                    """SELECT ea.article_id FROM edition_articles ea JOIN editions e ON e.edition_id = ea.edition_id
+                       WHERE e.user_id = ? ORDER BY e.created_at DESC LIMIT 7""", (user_id,)
+                )
+            return {row["article_id"] for row in rows}
 
     def preview(
         self, user_id: str, profile: ProfilePreferences, edition_size: int | None = None,
-        edition_date: str | None = None,
+        edition_date: str | None = None, exclude_edition_id: str | None = None,
     ) -> RecommendationResult:
         candidates: list[ScoredArticle] = []
         now = utc_now()
-        for raw in self._eligible_rows(profile, user_id):
+        for raw in self._eligible_rows(profile, user_id, exclude_edition_id):
             article, topics, embedding = self._prepare_article(raw)
             if not embedding or (
                 profile.embedder_name

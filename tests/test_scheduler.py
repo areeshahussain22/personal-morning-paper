@@ -17,3 +17,16 @@ def test_generation_job_key_is_idempotent(tmp_path):
     second = runner.start("generate_edition", "reader:2026-10-17")
     assert first is not None
     assert second is None
+
+
+def test_failed_generation_job_can_be_retried(tmp_path):
+    database = Database(tmp_path / "jobs.db")
+    runner = JobRunner(database)
+    first = runner.start("generate_edition", "reader:2026-10-17")
+    assert first is not None
+
+    runner.finish(first, "failed", error="No fresh articles")
+
+    retry = runner.start("generate_edition", "reader:2026-10-17")
+    assert retry == first
+    assert runner.start("generate_edition", "reader:2026-10-17") is None

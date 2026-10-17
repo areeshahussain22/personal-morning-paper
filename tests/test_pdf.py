@@ -35,11 +35,17 @@ def test_pdf_renderer_writes_pdf_and_uses_pdf_tokens(tmp_path: Path, monkeypatch
     )
     assert path.read_bytes().startswith(b"%PDF")
     with database.connect() as db:
-        token = db.execute(
-            "SELECT token_source FROM link_tokens WHERE edition_id=? AND token_source='pdf'",
+        token_row = db.execute(
+            "SELECT token, token_source, article_id, position FROM link_tokens "
+            "WHERE edition_id=? AND token_source='pdf'",
             (result["edition_id"],),
         ).fetchone()
-    assert token["token_source"] == "pdf"
+    assert token_row["token_source"] == "pdf"
+    details = ProfileRepository(database).token_details(token_row["token"])
+    assert details is not None
+    assert details["article_id"] == token_row["article_id"]
+    assert details["position"] == token_row["position"]
+    assert details["original_url"].startswith("https://")
 
 
 def test_pdf_cache_and_force_invalidation(tmp_path: Path, monkeypatch) -> None:

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import pytest
 
 from app.repositories.database import Database
 from app.repositories.profile_repository import ProfileRepository
@@ -62,3 +65,18 @@ def test_summary_cache_is_reused_for_existing_article(tmp_path: Path) -> None:
         ).fetchone()
     assert after["summary"] == before["summary"]
     assert after["summary_source"] == before["summary_source"]
+
+
+def test_empty_pool_does_not_create_a_ready_edition(tmp_path: Path) -> None:
+    service, user_id, database = make_service(tmp_path / "empty-pool.db")
+    with database.connect() as db:
+        db.execute(
+            "UPDATE articles SET published_at=?",
+            ((datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),),
+        )
+
+    with pytest.raises(LookupError, match="No eligible articles"):
+        asyncio.run(service.generate(user_id, "2026-10-17", use_llm=False))
+
+    with database.connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM editions").fetchone()[0] == 0

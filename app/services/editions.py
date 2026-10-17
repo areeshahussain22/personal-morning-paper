@@ -149,16 +149,24 @@ class EditionService:
     ) -> dict:
         edition_date = edition_date.isoformat() if isinstance(edition_date, date) else edition_date
         existing = self.profiles.edition_for_date(user_id, edition_date)
-        if existing and not force:
+        if existing and existing.get("items") and not force:
             return existing
+        replace_empty_existing = existing is not None
         started = time.perf_counter()
         profile = self.profiles.get_preferences(user_id)
         if profile is None:
             raise LookupError("User not found")
         self.learning.process_user(user_id)
         profile = self.profiles.get_preferences(user_id)
-        recommendation = self.recommendation.preview(user_id, profile, edition_date=edition_date)
+        recommendation = self.recommendation.preview(
+            user_id,
+            profile,
+            edition_date=edition_date,
+            exclude_edition_id=existing["edition_id"] if existing and force else None,
+        )
         selected = _all_items(recommendation)
+        if not selected:
+            raise LookupError("No eligible articles are available for this edition yet")
         rows, _, _ = await self.ensure_summaries([item for _, item in selected])
         selected_ids = {item.article["article_id"] for _, item in selected}
         selected = [(group, item) for group, item in selected if item.article["article_id"] in selected_ids]
@@ -245,7 +253,8 @@ class EditionService:
         timings = {"total": int((time.perf_counter() - started) * 1000)}
         result["stage_timings"] = timings
         edition_id = self.profiles.save_generated_edition(
-            user_id, edition_date, result, items, layout_source, layout_provider, layout_model, timings, force
+            user_id, edition_date, result, items, layout_source, layout_provider, layout_model, timings,
+            force or replace_empty_existing,
         )
         result["edition_id"] = edition_id
         return result

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -41,13 +42,35 @@ class JobRunner:
 
     def start(self, job: str, key: str) -> int | None:
         with self.database.connect() as db:
+            existing = db.execute(
+                "SELECT id, status FROM job_runs WHERE job=? AND run_key=?", (job, key)
+            ).fetchone()
+            if existing is not None:
+                retryable = existing["status"] not in {"running", "success"}
+                if job == "generate_edition" and existing["status"] == "success":
+                    user_id, edition_date = key.rsplit(":", 1)
+                    edition = db.execute(
+                        "SELECT result_json FROM editions WHERE user_id=? AND edition_date=?",
+                        (user_id, edition_date),
+                    ).fetchone()
+                    retryable = (
+                        edition is None or not json.loads(edition["result_json"]).get("items")
+                    )
+                if not retryable:
+                    return None
+                db.execute(
+                    "UPDATE job_runs SET status='running', started_at=?, finished_at=NULL, "
+                    "error=NULL, stats_json='{}' WHERE id=?",
+                    (to_db_time(utc_now()), existing["id"]),
+                )
+                return existing["id"]
             try:
                 cursor = db.execute(
                     "INSERT INTO job_runs(job,run_key,status,started_at) VALUES(?,?,?,?)",
                     (job, key, "running", to_db_time(utc_now())),
                 )
                 return cursor.lastrowid
-            except Exception:
+            except sqlite3.IntegrityError:
                 return None
 
     def finish(self, run_id: int, status: str, stats: dict | None = None, error: str | None = None) -> None:
@@ -107,6 +130,8 @@ class JobRunner:
             run_id = self.start("generate_edition", key)
             if run_id is None:
                 return {"user_id": user_id, "status": "skipped"}
+            repo = ProfileRepository(self.database)
+            repo.set_generation_status(user_id, edition_date, "running", "selecting")
             for attempt in range(3):
                 try:
                     LearningProcessor(self.database).process_user(user_id)
@@ -115,11 +140,17 @@ class JobRunner:
                     client = build_client()
                     async with client:
                         result = await EditionService(self.database, recommender, client).generate(user_id, edition_date)
+                    if not result.get("items"):
+                        raise LookupError("No eligible articles are available for this edition yet")
                     self.finish(run_id, "success", {"edition_id": result["edition_id"], "attempt": attempt + 1})
+                    repo.set_generation_status(user_id, edition_date, "ready", "ready")
                     return {"user_id": user_id, "status": "success"}
                 except Exception as exc:
                     if attempt == 2:
                         self.finish(run_id, "failed", error=str(exc))
+                        repo.set_generation_status(
+                            user_id, edition_date, "failed", "failed", str(exc)[:500]
+                        )
                         logger.exception("edition generation failed user=%s", user_id)
                         return {"user_id": user_id, "status": "failed"}
                     await asyncio.sleep(2 ** attempt)

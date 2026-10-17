@@ -21,6 +21,10 @@
     <p class="kicker">Paper in preparation</p>
     <h2>Your paper is being prepared.</h2>
     <p>The scheduler is selecting, summarizing, and arranging today’s stories.</p>
+  {% elif generation and generation.status == "ready" %}
+    <p class="kicker">No fresh stories yet</p>
+    <h2>Your next paper is waiting for new articles.</h2>
+    <p>The newsroom will check again automatically. Your previous papers are available in the archive.</p>
   {% else %}
     <p class="kicker">Paper scheduled</p>
     <h2>Your paper will be ready automatically.</h2>
