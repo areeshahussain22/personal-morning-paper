@@ -15,6 +15,8 @@ from app.services.llm import (
     ProviderConfig,
     wrap_untrusted_blocks,
 )
+from app.core.logging import SensitiveDataFilter
+import logging
 
 
 class FakeClient:
@@ -119,3 +121,35 @@ def test_all_providers_unavailable(tmp_path: Path) -> None:
     service = client(tmp_path, FakeClient([response({}, 503)]), ["ollama"])
     with pytest.raises(LLMUnavailable):
         run(service.generate_structured("test", "system", [], "say", InterestSummary))
+
+
+def test_gemini_key_is_sent_in_header_not_query(tmp_path: Path) -> None:
+    fake = FakeClient([response({"candidates": [{"content": {"parts": [{"text": '{"text":"ok"}'}]}}]})])
+    service = client(tmp_path, fake, ["gemini"])
+    service.providers["gemini"] = ProviderConfig(
+        "gemini", "model", "secret", "https://gemini.test"
+    )
+    run(service.generate_structured("test", "system", [], "say", InterestSummary))
+    assert "?" not in fake.calls[0]["url"]
+    assert fake.calls[0]["headers"]["x-goog-api-key"] == "secret"
+
+
+def test_failure_logs_safe_status_and_message(tmp_path: Path) -> None:
+    fake = FakeClient([response({"error": "no"}, 404)])
+    service = client(tmp_path, fake, ["groq"])
+    with pytest.raises(LLMUnavailable):
+        run(service.generate_structured("test", "system", [], "say", InterestSummary))
+    with Database(tmp_path / "llm.db").connect() as db:
+        row = db.execute("SELECT error_status, error_message FROM llm_calls").fetchone()
+    assert row["error_status"] == 404
+    assert row["error_message"] == "HTTP 404"
+
+
+def test_log_filter_redacts_secrets() -> None:
+    record = logging.LogRecord(
+        "httpx", logging.ERROR, "", 1,
+        "https://x.test/?key=secret Authorization: Bearer token", (), None,
+    )
+    SensitiveDataFilter().filter(record)
+    assert "secret" not in record.msg
+    assert "token" not in record.msg

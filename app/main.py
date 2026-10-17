@@ -10,8 +10,10 @@ from app.api.ingestion import router as ingestion_router
 from app.api.onboarding import router as onboarding_router
 from app.api.recommendations import router as recommendations_router
 from app.core.config import get_settings
+from app.core.logging import configure_http_logging
 
 settings = get_settings()
+configure_http_logging()
 if settings.environment != "development" and not settings.session_secret:
     raise RuntimeError("SESSION_SECRET is required outside development")
 

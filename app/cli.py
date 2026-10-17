@@ -29,9 +29,38 @@ def build_client() -> LLMClient:
     )
 
 
-async def llm_check() -> int:
+async def llm_check(provider_name: str | None = None) -> int:
+    settings = get_settings()
+    if provider_name:
+        configured = {
+            "gemini": settings.gemini_api_key,
+            "groq": settings.groq_api_key,
+            "openrouter": settings.openrouter_api_key,
+            "ollama": "local",
+        }.get(provider_name)
+        model = {
+            "gemini": settings.gemini_model,
+            "groq": settings.groq_model,
+            "openrouter": settings.openrouter_model,
+            "ollama": settings.ollama_model,
+        }.get(provider_name)
+        if provider_name not in {"gemini", "groq", "openrouter", "ollama"}:
+            print(f"unknown provider={provider_name}", file=sys.stderr)
+            return 2
+        print(f"provider={provider_name}")
+        print(f"key_configured={'yes' if configured else 'no'}")
+        print(f"model={model}")
+        if provider_name != "ollama" and not configured:
+            print("status=skipped")
+            return 0
+        order = [provider_name]
+    else:
+        order = None
     try:
-        async with build_client() as client:
+        client_config = build_client()
+        if order is not None:
+            client_config.provider_order = order
+        async with client_config as client:
             result = await client.generate_structured(
                 "diagnostic",
                 "Return a short diagnostic response.",
@@ -45,7 +74,8 @@ async def llm_check() -> int:
         print(f"attempts={result.metadata.attempts}")
         return 0
     except LLMUnavailable as exc:
-        print(f"LLM unavailable: {exc}", file=sys.stderr)
+        print("status=unavailable")
+        print("error=provider unavailable")
         return 1
 
 
@@ -113,9 +143,10 @@ def main() -> None:
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--no-llm", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--provider", choices=["gemini", "groq", "openrouter", "ollama"])
     args = parser.parse_args()
     if args.command == "llm-check":
-        code = asyncio.run(llm_check())
+        code = asyncio.run(llm_check(args.provider))
     elif args.command == "generate-edition":
         if not args.user_id:
             parser.error("--user-id is required for generate-edition")

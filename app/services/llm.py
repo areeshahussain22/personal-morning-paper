@@ -25,6 +25,17 @@ class LLMUnavailable(RuntimeError):
     pass
 
 
+def _error_details(exc: Exception) -> tuple[int | None, str]:
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if isinstance(exc, httpx.RequestError):
+        message = "connection error"
+    elif status is not None:
+        message = f"HTTP {status}"
+    else:
+        message = type(exc).__name__
+    return status, message[:200]
+
+
 class LLMValidationError(RuntimeError):
     pass
 
@@ -119,11 +130,18 @@ class LLMClient:
                 )
                 self.database.write_llm_cache(cache_key, result.value.model_dump())
                 return result
-            except (httpx.TimeoutException, httpx.HTTPStatusError, LLMValidationError, ValueError) as exc:
+            except (
+                httpx.TimeoutException,
+                httpx.NetworkError,
+                httpx.HTTPStatusError,
+                LLMValidationError,
+                ValueError,
+            ) as exc:
                 last_error = exc
+                status, message = _error_details(exc)
                 self.database.log_llm_call(
                     provider.name, provider.model, purpose, False,
-                    type(exc).__name__, 0, len(prompt),
+                    type(exc).__name__, 0, len(prompt), status, message,
                 )
                 logger.warning(
                     "LLM provider failed: provider=%s purpose=%s error_type=%s",
@@ -186,7 +204,9 @@ class LLMClient:
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"responseMimeType": "application/json", "responseSchema": schema},
             }
-            response = await self._client.post(url, params={"key": provider.api_key}, json=payload)
+            response = await self._client.post(
+                url, headers={"x-goog-api-key": provider.api_key or ""}, json=payload
+            )
             response.raise_for_status()
             text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
         elif provider.name == "ollama":

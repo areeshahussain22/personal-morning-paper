@@ -178,6 +178,8 @@ class Database:
                     purpose TEXT NOT NULL,
                     success INTEGER NOT NULL,
                     error_type TEXT,
+                    error_status INTEGER,
+                    error_message TEXT,
                     latency_ms INTEGER NOT NULL,
                     input_size INTEGER NOT NULL,
                     created_at TEXT NOT NULL
@@ -198,6 +200,8 @@ class Database:
             self._add_column_if_missing(connection, "articles", "summary_source", "TEXT")
             self._add_column_if_missing(connection, "articles", "summary_provider", "TEXT")
             self._add_column_if_missing(connection, "articles", "summary_model", "TEXT")
+            self._add_column_if_missing(connection, "llm_calls", "error_status", "INTEGER")
+            self._add_column_if_missing(connection, "llm_calls", "error_message", "TEXT")
             self._add_column_if_missing(connection, "editions", "edition_date", "TEXT")
             self._add_column_if_missing(connection, "editions", "layout_source", "TEXT")
             self._add_column_if_missing(connection, "editions", "layout_provider", "TEXT")
@@ -216,13 +220,18 @@ class Database:
     def log_llm_call(
         self, provider: str, model: str, purpose: str, success: bool,
         error_type: str | None, latency_ms: int, input_size: int,
+        error_status: int | None = None, error_message: str | None = None,
     ) -> None:
         with self.connect() as connection:
             connection.execute(
                 """INSERT INTO llm_calls
-                   (provider, model, purpose, success, error_type, latency_ms, input_size, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (provider, model, purpose, int(success), error_type, latency_ms, input_size, to_db_time(utc_now())),
+                   (provider, model, purpose, success, error_type, error_status,
+                    error_message, latency_ms, input_size, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    provider, model, purpose, int(success), error_type, error_status,
+                    error_message, latency_ms, input_size, to_db_time(utc_now()),
+                ),
             )
 
     def llm_calls_per_day(self) -> list[sqlite3.Row]:
