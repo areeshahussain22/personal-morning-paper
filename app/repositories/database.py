@@ -81,6 +81,26 @@ class Database:
                     long_vector TEXT,
                     short_vector TEXT
                 );
+                CREATE TABLE IF NOT EXISTS user_settings (
+                    user_id TEXT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                    depth TEXT NOT NULL DEFAULT 'standard',
+                    edition_size INTEGER NOT NULL DEFAULT 10,
+                    surprise_level TEXT NOT NULL DEFAULT 'medium',
+                    exploration_floor REAL NOT NULL DEFAULT 0.15,
+                    timezone TEXT NOT NULL DEFAULT 'UTC',
+                    delivery_time TEXT NOT NULL DEFAULT '07:00',
+                    display_name TEXT,
+                    onboarding_baseline_json TEXT NOT NULL DEFAULT '{}'
+                );
+                CREATE TABLE IF NOT EXISTS edition_generation_status (
+                    user_id TEXT NOT NULL,
+                    edition_date TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    stage TEXT NOT NULL,
+                    error TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, edition_date)
+                );
                 CREATE TABLE IF NOT EXISTS user_topic_preferences (
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                     topic TEXT NOT NULL,

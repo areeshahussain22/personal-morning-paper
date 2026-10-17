@@ -33,6 +33,8 @@ class Settings:
     groq_model: str = "llama-3.1-8b-instant"
     openrouter_model: str = "meta-llama/llama-3.3-8b-instruct:free"
     ollama_model: str = "llama3.2"
+    environment: str = "development"
+    session_secret: str | None = None
 
 
 def _load_local_env() -> None:
@@ -85,4 +87,6 @@ def get_settings() -> Settings:
         groq_model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
         openrouter_model=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-8b-instruct:free"),
         ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2"),
+        environment=os.getenv("ENVIRONMENT", "development"),
+        session_secret=os.getenv("SESSION_SECRET"),
     )

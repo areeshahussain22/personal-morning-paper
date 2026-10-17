@@ -16,6 +16,8 @@ class ProfileRepository:
     def create_user(
         self, name: str, topic_weights: dict, source_weights: dict, muted_topics: list[str],
         vector: list[float] | None = None, embedder_name: str | None = None,
+        selected_sub_interests: list[str] | None = None, interest_tags: list[str] | None = None,
+        settings: dict | None = None,
     ) -> str:
         user_id = uuid4().hex
         with self.database.connect() as db:
@@ -27,6 +29,29 @@ class ProfileRepository:
                  json.dumps(vector) if vector else None, embedder_name, len(vector) if vector else None),
             )
             self._replace_preferences(db, user_id, topic_weights, source_weights, muted_topics)
+            profile_settings = settings or {}
+            baseline = {
+                "topic_weights": topic_weights,
+                "selected_sub_interests": selected_sub_interests or [],
+                "interest_tags": interest_tags or [],
+            }
+            db.execute(
+                """INSERT INTO user_settings
+                   (user_id, depth, edition_size, surprise_level, exploration_floor, timezone,
+                    delivery_time, display_name, onboarding_baseline_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    user_id,
+                    profile_settings.get("depth", "standard"),
+                    profile_settings.get("edition_size", 10),
+                    profile_settings.get("surprise_level", "medium"),
+                    profile_settings.get("exploration_floor", 0.15),
+                    profile_settings.get("timezone", "UTC"),
+                    profile_settings.get("delivery_time", "07:00"),
+                    profile_settings.get("display_name") or name,
+                    json.dumps(baseline),
+                ),
+            )
         return user_id
 
     def _replace_preferences(self, db: Any, user_id: str, topics: dict, sources: dict, muted: list[str]) -> None:
@@ -63,6 +88,7 @@ class ProfileRepository:
             topics = db.execute("SELECT topic, weight FROM user_topic_preferences WHERE user_id = ?", (user_id,)).fetchall()
             sources = db.execute("SELECT source_id, weight FROM user_source_preferences WHERE user_id = ?", (user_id,)).fetchall()
             muted = db.execute("SELECT topic FROM user_muted_topics WHERE user_id = ?", (user_id,)).fetchall()
+            settings = db.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,)).fetchone()
             return {
                 **dict(user),
                 "topic_weights": {row["topic"]: row["weight"] for row in topics},
@@ -70,6 +96,7 @@ class ProfileRepository:
                 "muted_topics": [row["topic"] for row in muted],
                 "vector_embedder": user["vector_embedder"],
                 "vector_dimension": user["vector_dimension"],
+                "settings": dict(settings) if settings else {},
             }
 
     def get_preferences(self, user_id: str):
@@ -86,7 +113,44 @@ class ProfileRepository:
             short_vector=json.loads(profile["short_vector"]) if profile["short_vector"] else None,
             embedder_name=profile["vector_embedder"],
             vector_dimension=profile["vector_dimension"],
+            edition_size=profile["settings"].get("edition_size", 10),
+            exploration_floor=profile["settings"].get("exploration_floor", 0.15),
         )
+
+    def update_settings(self, user_id: str, settings: dict) -> bool:
+        with self.database.connect() as db:
+            cursor = db.execute(
+                """UPDATE user_settings SET depth=?, edition_size=?, surprise_level=?,
+                   exploration_floor=?, timezone=?, delivery_time=?, display_name=?
+                   WHERE user_id=?""",
+                (
+                    settings["depth"], settings["edition_size"], settings["surprise_level"],
+                    settings["exploration_floor"], settings["timezone"], settings["delivery_time"],
+                    settings.get("display_name"), user_id,
+                ),
+            )
+        return cursor.rowcount > 0
+
+    def set_generation_status(
+        self, user_id: str, edition_date: str, status: str, stage: str, error: str | None = None
+    ) -> None:
+        with self.database.connect() as db:
+            db.execute(
+                """INSERT INTO edition_generation_status
+                   (user_id, edition_date, status, stage, error, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(user_id, edition_date) DO UPDATE SET status=excluded.status,
+                   stage=excluded.stage, error=excluded.error, updated_at=excluded.updated_at""",
+                (user_id, edition_date, status, stage, error, to_db_time(utc_now())),
+            )
+
+    def generation_status(self, user_id: str, edition_date: str) -> dict | None:
+        with self.database.connect() as db:
+            row = db.execute(
+                "SELECT * FROM edition_generation_status WHERE user_id=? AND edition_date=?",
+                (user_id, edition_date),
+            ).fetchone()
+        return dict(row) if row else None
 
     def save_edition(self, user_id: str, result: dict) -> str:
         edition_id = uuid4().hex

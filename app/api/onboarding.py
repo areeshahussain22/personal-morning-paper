@@ -1,0 +1,163 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import date
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from pydantic import BaseModel, Field, field_validator
+
+from app.cli import build_client
+from app.core.config import get_settings
+from app.repositories.database import Database
+from app.repositories.profile_repository import ProfileRepository
+from app.services.editions import EditionService
+from app.services.embeddings import create_embedder
+from app.services.onboarding import make_tags
+from app.services.recommendation import RecommendationService, build_profile_vector
+from app.services.topics import TOPICS
+
+router = APIRouter(prefix="/api", tags=["onboarding"])
+TOPIC_NAMES = {topic.name for topic in TOPICS}
+
+
+class TagRequest(BaseModel):
+    text: str = Field(default="", max_length=1000)
+
+
+class OnboardingRequest(BaseModel):
+    selected_topics: list[str] = Field(default_factory=list, max_length=6)
+    selected_sub_interests: list[str] = Field(default_factory=list, max_length=20)
+    interest_tags: list[str] = Field(default_factory=list, max_length=10)
+    depth: str = "standard"
+    stories_per_edition: int = Field(default=10, ge=10, le=20)
+    surprise_level: str = "medium"
+    timezone: str = Field(default="UTC", min_length=1, max_length=80)
+    delivery_time: str = Field(default="07:00", pattern=r"^\d{2}:\d{2}$")
+    display_name: str | None = Field(default=None, max_length=120)
+
+    @field_validator("selected_topics")
+    @classmethod
+    def valid_topics(cls, values: list[str]) -> list[str]:
+        if any(value not in TOPIC_NAMES for value in values):
+            raise ValueError("selected_topics contains an unknown topic")
+        return list(dict.fromkeys(values))
+
+    @field_validator("depth")
+    @classmethod
+    def valid_depth(cls, value: str) -> str:
+        if value not in {"brief", "standard", "long"}:
+            raise ValueError("depth must be brief, standard, or long")
+        return value
+
+    @field_validator("surprise_level")
+    @classmethod
+    def valid_surprise(cls, value: str) -> str:
+        if value not in {"low", "medium", "high"}:
+            raise ValueError("surprise_level must be low, medium, or high")
+        return value
+
+
+def _create_profile(payload: OnboardingRequest) -> str:
+    settings = get_settings()
+    database = Database(settings.database_path)
+    repo = ProfileRepository(database)
+    embedder = create_embedder(
+        settings.embedding_backend, settings.embedding_dimensions, settings.embedding_allow_fallback
+    )
+    weights = {topic: 3.0 for topic in payload.selected_topics}
+    weights.update({interest: 2.0 for interest in payload.selected_sub_interests})
+    weights.update({tag: 2.0 for tag in payload.interest_tags})
+    vector = build_profile_vector(
+        embedder, weights, payload.selected_sub_interests, payload.interest_tags
+    )
+    floor = {"low": 0.10, "medium": 0.15, "high": 0.25}[payload.surprise_level]
+    return repo.create_user(
+        payload.display_name or "Reader",
+        weights,
+        {},
+        [],
+        vector,
+        embedder.name,
+        payload.selected_sub_interests,
+        payload.interest_tags,
+        {
+            "depth": payload.depth,
+            "edition_size": payload.stories_per_edition,
+            "surprise_level": payload.surprise_level,
+            "exploration_floor": floor,
+            "timezone": payload.timezone,
+            "delivery_time": payload.delivery_time,
+            "display_name": payload.display_name,
+        },
+    )
+
+
+def _generate_background(user_id: str, edition_date: str) -> None:
+    async def run() -> None:
+        settings = get_settings()
+        database = Database(settings.database_path)
+        repo = ProfileRepository(database)
+        repo.set_generation_status(user_id, edition_date, "running", "selecting")
+        recommender = RecommendationService(
+            database,
+            freshness_hours=settings.freshness_hours,
+            topic_threshold=settings.real_topic_match_threshold
+            if settings.embedding_backend == "sentence_transformer"
+            else settings.topic_match_threshold,
+            dimensions=settings.embedding_dimensions,
+        )
+        client = build_client()
+        try:
+            async with client:
+                service = EditionService(database, recommender, client)
+                repo.set_generation_status(user_id, edition_date, "running", "summarizing")
+                repo.set_generation_status(user_id, edition_date, "running", "arranging")
+                await service.generate(user_id, edition_date)
+                repo.set_generation_status(user_id, edition_date, "running", "saving")
+            repo.set_generation_status(user_id, edition_date, "ready", "ready")
+        except Exception as exc:
+            repo.set_generation_status(user_id, edition_date, "failed", "failed", str(exc)[:500])
+    asyncio.run(run())
+
+
+@router.post("/onboarding/tags")
+async def onboarding_tags(payload: TagRequest) -> dict[str, list[str]]:
+    client = build_client()
+    async with client:
+        return {"tags": await make_tags(payload.text, client)}
+
+
+@router.post("/onboarding")
+async def create_onboarding(
+    payload: OnboardingRequest, request: Request, background_tasks: BackgroundTasks
+) -> dict[str, str]:
+    user_id = _create_profile(payload)
+    request.session["user_id"] = user_id
+    edition_date = date.today().isoformat()
+    repo = ProfileRepository(Database(get_settings().database_path))
+    repo.set_generation_status(user_id, edition_date, "queued", "queued")
+    background_tasks.add_task(_generate_background, user_id, edition_date)
+    return {"user_id": user_id, "edition_date": edition_date}
+
+
+@router.get("/me")
+def me(request: Request) -> dict:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not signed in")
+    profile = ProfileRepository(Database(get_settings().database_path)).get_profile(user_id)
+    if profile is None:
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="Not signed in")
+    return {"user_id": user_id, "display_name": profile["settings"].get("display_name"), "settings": profile["settings"]}
+
+
+@router.get("/users/{user_id}/editions/{edition_date}/status")
+def generation_status(user_id: str, edition_date: date) -> dict:
+    repo = ProfileRepository(Database(get_settings().database_path))
+    if repo.get_profile(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    status = repo.generation_status(user_id, edition_date.isoformat())
+    if status is None:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    return status

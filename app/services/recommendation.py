@@ -43,8 +43,8 @@ def score_article(
     return score, {"T": T, "E": E, "S": S, "C": C, "F": F, "reliability": reliability}
 
 
-def exploration_share(editions_read: int) -> float:
-    return max(0.15, 0.40 - 0.05 * max(0, editions_read))
+def exploration_share(editions_read: int, floor: float = 0.15) -> float:
+    return max(floor, 0.40 - 0.05 * max(0, editions_read))
 
 
 def title_similarity(left: str, right: str) -> float:
@@ -160,7 +160,10 @@ class RecommendationService:
         must_know = self._must_know(candidates)
         selected_ids = {item.article["article_id"] for item in must_know}
         remaining = [item for item in candidates if item.article["article_id"] not in selected_ids]
-        exploration_count = min(len(remaining), round(edition_size * exploration_share(profile.editions_read)))
+        edition_size = min(edition_size, profile.edition_size)
+        exploration_count = min(
+            len(remaining), round(edition_size * exploration_share(profile.editions_read, profile.exploration_floor))
+        )
         outside = [item for item in remaining if not set(item.topics) & set(sorted(profile.topic_weights, key=profile.topic_weights.get, reverse=True)[:3])]
         exploration = [self._with_reason(item, "exploration", f"Something new: {item.topics[0] if item.topics else item.article['topic']}") for item in outside[:exploration_count]]
         selected_ids.update(item.article["article_id"] for item in exploration)

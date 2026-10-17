@@ -13,6 +13,8 @@ class ProfilePreferences:
     editions_read: int = 0
     embedder_name: str | None = None
     vector_dimension: int | None = None
+    edition_size: int = 10
+    exploration_floor: float = 0.15
 
 
 @dataclass(frozen=True)
