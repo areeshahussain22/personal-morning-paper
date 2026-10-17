@@ -21,6 +21,18 @@ class Settings:
     cluster_similarity_threshold: float = 0.72
     hashed_cluster_similarity_threshold: float = 0.45
     real_topic_match_threshold: float = 0.45
+    llm_provider_order: tuple[str, ...] = ("gemini", "groq", "openrouter", "ollama")
+    llm_timeout_seconds: float = 30.0
+    llm_max_retries: int = 2
+    llm_concurrency_limit: int = 2
+    llm_min_provider_interval: float = 0.0
+    gemini_api_key: str | None = None
+    groq_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    groq_model: str = "llama-3.1-8b-instant"
+    openrouter_model: str = "meta-llama/llama-3.3-8b-instruct:free"
+    ollama_model: str = "llama3.2"
 
 
 def get_settings() -> Settings:
@@ -41,4 +53,20 @@ def get_settings() -> Settings:
         cluster_similarity_threshold=float(os.getenv("CLUSTER_SIMILARITY_THRESHOLD", "0.72")),
         hashed_cluster_similarity_threshold=float(os.getenv("HASHED_CLUSTER_SIMILARITY_THRESHOLD", "0.45")),
         real_topic_match_threshold=float(os.getenv("REAL_TOPIC_MATCH_THRESHOLD", "0.45")),
+        llm_provider_order=tuple(
+            item.strip() for item in os.getenv(
+                "LLM_PROVIDER_ORDER", "gemini,groq,openrouter,ollama"
+            ).split(",") if item.strip()
+        ),
+        llm_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "30")),
+        llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "2")),
+        llm_concurrency_limit=int(os.getenv("LLM_CONCURRENCY_LIMIT", "2")),
+        llm_min_provider_interval=float(os.getenv("LLM_MIN_PROVIDER_INTERVAL", "0")),
+        gemini_api_key=os.getenv("GEMINI_API_KEY"),
+        groq_api_key=os.getenv("GROQ_API_KEY"),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        groq_model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+        openrouter_model=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-8b-instruct:free"),
+        ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2"),
     )
