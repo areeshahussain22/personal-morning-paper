@@ -26,4 +26,7 @@ def get_settings() -> Settings:
         request_timeout_seconds=float(os.getenv("RSS_TIMEOUT_SECONDS", "15")),
         max_retries=int(os.getenv("RSS_MAX_RETRIES", "2")),
         max_concurrent_feeds=int(os.getenv("RSS_MAX_CONCURRENT_FEEDS", "4")),
+        recommendation_edition_size=int(os.getenv("RECOMMENDATION_EDITION_SIZE", "10")),
+        topic_match_threshold=float(os.getenv("TOPIC_MATCH_THRESHOLD", "0.12")),
+        embedding_dimensions=int(os.getenv("EMBEDDING_DIMENSIONS", "64")),
     )

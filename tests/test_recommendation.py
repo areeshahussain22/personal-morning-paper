@@ -94,6 +94,16 @@ def test_muted_topics_and_previous_editions_are_excluded(tmp_path: Path) -> None
     assert not ids.intersection({"a1", "a2"})
 
 
+def test_low_reliability_and_empty_pool_are_safe(tmp_path: Path) -> None:
+    database, user_id = seed_database(tmp_path / "recommendations.db")
+    with database.connect() as db:
+        db.execute("UPDATE sources SET reliability_score = 0.2")
+    profile = ProfileRepository(database).get_preferences(user_id)
+    assert profile is not None
+    result = RecommendationService(database).preview(user_id, profile)
+    assert result.must_know == result.exploration == result.regular == []
+
+
 def test_profile_and_recommendation_api_validation(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "api.db"))
     client = TestClient(app)
