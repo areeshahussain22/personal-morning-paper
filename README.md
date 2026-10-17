@@ -96,6 +96,35 @@ Run ingestion and create a snapshot from PowerShell:
 python scripts\run_ingestion.py
 ```
 
+### Daily ingestion on Windows
+
+The repository includes [`scripts/daily_ingest.ps1`](scripts/daily_ingest.ps1).
+It synchronizes the enabled source registry, ingests feeds, runs embedding
+backfill (including topic assignment and clustering), and creates the daily
+archive snapshot. Each run writes a timestamped log under `data/logs/`.
+That directory and the lock file are ignored by Git. A same-day rerun reuses
+the existing calendar-day snapshot instead of creating a duplicate.
+
+Run it manually from the repository root:
+
+```powershell
+Set-Location C:\path\to\personal-morning-paper
+PowerShell -NoProfile -ExecutionPolicy Bypass -File .\scripts\daily_ingest.ps1
+```
+
+The script uses `.venv\Scripts\python.exe`, exits non-zero on failure, and
+holds an exclusive lock so overlapping runs are rejected.
+
+To schedule it twice daily in Windows Task Scheduler, review and run these
+commands as your own logged-in user. They do not run when you are logged off:
+
+```powershell
+schtasks /Create /TN "Personal Morning Paper - Daily Ingest 08" /TR "PowerShell.exe -NoProfile -ExecutionPolicy Bypass -File C:\path\to\personal-morning-paper\scripts\daily_ingest.ps1" /SC DAILY /ST 08:00 /RU "$env:USERNAME" /RP * /F
+schtasks /Create /TN "Personal Morning Paper - Daily Ingest 20" /TR "PowerShell.exe -NoProfile -ExecutionPolicy Bypass -File C:\path\to\personal-morning-paper\scripts\daily_ingest.ps1" /SC DAILY /ST 20:00 /RU "$env:USERNAME" /RP * /F
+```
+
+Replace `C:\path\to\personal-morning-paper` with the absolute project path.
+
 The API can run ingestion and inspect the pool:
 
 ```powershell

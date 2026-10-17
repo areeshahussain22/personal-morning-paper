@@ -326,6 +326,15 @@ class Database:
                 (snapshot_id, to_db_time(utc_now()), to_db_time(as_of), len(payload), json.dumps(payload)),
             )
 
+    def snapshot_for_date(self, calendar_date: str) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM archive_snapshots WHERE substr(as_of, 1, 10) = ? "
+                "ORDER BY as_of DESC LIMIT 1",
+                (calendar_date,),
+            ).fetchone()
+        return dict(row) if row else None
+
     def read_snapshot(self, snapshot_id: str) -> dict[str, Any] | None:
         with self.connect() as connection:
             row = connection.execute(

@@ -18,11 +18,24 @@ class ArticleArchive:
 
     def create_snapshot(self, as_of: datetime | None = None) -> dict:
         as_of = as_of or datetime.now(timezone.utc)
+        existing = self.database.snapshot_for_date(as_of.date().isoformat())
+        if existing is not None:
+            return {
+                "snapshot_id": existing["snapshot_id"],
+                "as_of": existing["as_of"],
+                "article_count": existing["article_count"],
+                "reused": True,
+            }
         cutoff = as_of - timedelta(hours=self.freshness_hours)
         rows = self.database.list_articles(10000, 0, cutoff)
         snapshot_id = uuid4().hex
         self.database.create_snapshot(snapshot_id, as_of, rows)
-        return {"snapshot_id": snapshot_id, "as_of": as_of.isoformat(), "article_count": len(rows)}
+        return {
+            "snapshot_id": snapshot_id,
+            "as_of": as_of.isoformat(),
+            "article_count": len(rows),
+            "reused": False,
+        }
 
     def replay_snapshot(self, snapshot_id: str) -> dict | None:
         return self.database.read_snapshot(snapshot_id)

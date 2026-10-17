@@ -120,6 +120,9 @@ def test_freshness_and_snapshot_replay(tmp_path: Path) -> None:
     assert replayed is not None
     assert replayed["article_count"] == 1
     assert replayed["articles"][0]["title"] == "Recent"
+    second = archive.create_snapshot(now + timedelta(hours=2))
+    assert second["snapshot_id"] == snapshot["snapshot_id"]
+    assert second["reused"] is True
 
 
 def test_ingestion_api_response_and_snapshot_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
