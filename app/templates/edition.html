@@ -12,7 +12,21 @@
   <section class="paper-section"><h2>{{ section.name|replace("_", " ")|title }}</h2><div class="section-grid">{% for item in edition.render_items if item.article_id in section.article_ids %}{{ story_card(item, true) }}{% endfor %}</div></section>
   {% endfor %}
 {% else %}
-<section class="empty-state card"><p class="kicker">No edition yet</p><h2>Your paper is waiting to be generated.</h2><p>Prepare today's stories when you're ready.</p><button class="primary" data-user-id="{{ user_id }}" data-generate-date="{{ edition.edition_date }}">Generate now</button><p id="generation-message" class="hint" role="status"></p></section>
+<section class="empty-state card" aria-live="polite">
+  {% if generation and generation.status == "failed" %}
+    <p class="kicker">Paper delayed</p>
+    <h2>We’re still preparing your paper.</h2>
+    <p>The newsroom will retry automatically. Please check back shortly.</p>
+  {% elif generation and generation.status in ["queued", "running"] %}
+    <p class="kicker">Paper in preparation</p>
+    <h2>Your paper is being prepared.</h2>
+    <p>The scheduler is selecting, summarizing, and arranging today’s stories.</p>
+  {% else %}
+    <p class="kicker">Paper scheduled</p>
+    <h2>Your paper will be ready automatically.</h2>
+    <p>The newsroom scheduler prepares it before your delivery time. Please check back shortly.</p>
+  {% endif %}
+</section>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="/static/edition.js"></script><script src="/static/events.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/events.js"></script>{% endblock %}

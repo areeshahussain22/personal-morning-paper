@@ -78,13 +78,21 @@ def _edition_context(request: Request, edition_date: str) -> dict:
     user_id = request.session.get("user_id")
     repo = _repo()
     stored = repo.render_edition(user_id, edition_date) if user_id else None
+    generation = repo.generation_status(user_id, edition_date) if user_id else None
     profile = repo.get_profile(user_id) if user_id else None
     if stored is None:
         stored = {"edition_date": edition_date, "items": [], "sections": [], "render_items": []}
     editions = repo.list_editions(user_id) if user_id else []
     number = next((index for index, item in enumerate(reversed(editions), 1)
                    if item["edition_date"] == edition_date), len(editions) + 1)
-    return {"edition": stored, "reader_name": (profile or {}).get("settings", {}).get("display_name") or (profile or {}).get("name", "Reader"), "edition_number": number, "user_id": user_id}
+    return {
+        "edition": stored,
+        "reader_name": (profile or {}).get("settings", {}).get("display_name")
+        or (profile or {}).get("name", "Reader"),
+        "edition_number": number,
+        "user_id": user_id,
+        "generation": generation,
+    }
 
 
 @app.get("/")
