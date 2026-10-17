@@ -3,6 +3,7 @@
 {% block title %}{{ edition.edition_date }} · Personal Morning Paper{% endblock %}
 {% block content %}
 <header class="edition-heading"><p class="kicker">Edition {{ edition_number }} · {{ edition.edition_date }}</p><h1>{{ reader_name }}'s morning paper</h1><p class="lede">Stories selected for your interests, with context from trusted sources.</p></header>
+{% if edition.items %}<p><a class="secondary" href="/edition/{{ edition.edition_date }}/pdf">Download PDF</a></p>{% endif %}
 {% if edition.render_items %}
   {% set lead = edition.render_items[0] %}
   <section class="lead-story" aria-labelledby="lead-headline">{{ story_card(lead) }}</section>

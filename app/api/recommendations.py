@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
@@ -8,6 +8,7 @@ from app.repositories.database import Database
 from app.repositories.profile_repository import ProfileRepository
 from app.services.embeddings import create_embedder
 from app.services.recommendation import RecommendationService, build_profile_vector
+from app.services.pdf import build_pdf
 from app.services.topics import TOPICS
 from app.services.editions import EditionService
 from app.cli import build_client
@@ -146,6 +147,7 @@ def edition_service(use_llm: bool) -> tuple[EditionService, object | None]:
 @router.post("/users/{user_id}/editions/generate")
 async def generate_edition(
     user_id: str,
+    background_tasks: BackgroundTasks,
     edition_date: date | None = None,
     force: bool = False,
     use_llm: bool = True,
@@ -154,8 +156,13 @@ async def generate_edition(
     try:
         if client is not None:
             async with client:
-                return await service.generate(user_id, edition_date or date.today(), force, use_llm)
-        return await service.generate(user_id, edition_date or date.today(), force, use_llm)
+                result = await service.generate(user_id, edition_date or date.today(), force, use_llm)
+        else:
+            result = await service.generate(user_id, edition_date or date.today(), force, use_llm)
+        background_tasks.add_task(
+            build_pdf, repository(), user_id, (edition_date or date.today()).isoformat(), get_settings()
+        )
+        return result
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

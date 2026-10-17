@@ -7,3 +7,4 @@ itsdangerous>=2.2,<3
 feedparser>=6.0,<7
 python-dateutil>=2.9,<3
 sentence-transformers>=3.0,<6
+weasyprint>=62,<69

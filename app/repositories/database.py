@@ -199,8 +199,9 @@ class Database:
                     edition_id TEXT NOT NULL REFERENCES editions(edition_id) ON DELETE CASCADE,
                     position INTEGER NOT NULL,
                     source_id TEXT NOT NULL,
+                    token_source TEXT NOT NULL DEFAULT 'web',
                     created_at TEXT NOT NULL,
-                    UNIQUE(user_id, article_id, edition_id, position, source_id)
+                    UNIQUE(user_id, article_id, edition_id, position, source_id, token_source)
                 );
                 CREATE INDEX IF NOT EXISTS idx_link_tokens_lookup ON link_tokens(token);
                 """
@@ -219,6 +220,10 @@ class Database:
             self._add_column_if_missing(connection, "editions", "layout_provider", "TEXT")
             self._add_column_if_missing(connection, "editions", "layout_model", "TEXT")
             self._add_column_if_missing(connection, "editions", "stage_timings_json", "TEXT")
+            self._add_column_if_missing(connection, "editions", "pdf_status", "TEXT")
+            self._add_column_if_missing(connection, "editions", "pdf_path", "TEXT")
+            self._add_column_if_missing(connection, "editions", "pdf_rendered_at", "TEXT")
+            self._add_column_if_missing(connection, "link_tokens", "token_source", "TEXT NOT NULL DEFAULT 'web'")
             connection.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_editions_user_date ON editions(user_id, edition_date)"
             )

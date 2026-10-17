@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ edition.edition_date }} · Personal Morning Paper</title><link rel="stylesheet" href="{{ public_base_url }}/static/print.css"></head>
+<body>
+<header class="masthead"><div class="rules"></div><p class="kicker">Personal Morning Paper · Edition {{ edition_number }}</p><h1>{{ reader_name }}'s morning paper</h1><p class="date">{{ edition.edition_date }} · Prepared for {{ reader_name }}</p><div class="rules"></div></header>
+{% if items %}
+<main>
+  <section class="lead"><h2>{{ items[0].headline }}</h2>{% if items[0].image_src %}<img src="{{ items[0].image_src }}" alt="">{% endif %}<p class="summary">{{ items[0].summary }}</p><p class="meta"><a href="{{ items[0].source_url }}">{{ items[0].source_name }}</a> · {{ items[0].published_at|relative_time }}</p></section>
+  <section class="body-columns">
+  {% for item in items[1:] %}
+  <article class="story"><h3>{{ item.headline }}</h3><p>{{ item.summary }}</p><p class="meta"><a href="{{ item.source_url }}">{{ item.source_name }}</a> · {{ item.published_at|relative_time }}</p></article>
+  {% endfor %}
+  </section>
+</main>
+{% else %}<p>No stories are available for this edition.</p>{% endif %}
+</body></html>

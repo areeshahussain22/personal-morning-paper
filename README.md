@@ -455,3 +455,34 @@ The application is then available at <http://127.0.0.1:8000>.
 ```powershell
 python -m pytest
 ```
+### PDF editions
+
+Each saved edition can be downloaded from `/edition/YYYY-MM-DD/pdf` or the
+**Download PDF** button. PDFs are stored in `data/pdfs/<user>/<date>.pdf`
+(and are ignored by Git). Rendering uses WeasyPrint by default:
+
+```text
+PDF_RENDERER=auto       # auto, weasyprint, or playwright
+PUBLIC_BASE_URL=http://localhost:8000
+```
+
+`auto` selects WeasyPrint when it imports and falls back to Playwright if a
+WeasyPrint runtime error occurs. Playwright is optional; install it with
+`pip install playwright` followed by `playwright install chromium` (the
+Chromium download is roughly 150 MB and varies by release). PDF links use
+the public base URL and only record clicks while the application is reachable.
+
+On Windows, WeasyPrint may need the GTK3 runtime. In PowerShell, download
+`https://github.com/nickvidal/winlibs/blob/master/gtk3-runtime.zip`, extract
+it, and add its `bin` directory to the current user's PATH, then restart
+PowerShell and retry. On Ubuntu/Debian:
+
+```bash
+sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libgdk-pixbuf-2.0-0 libcairo2
+```
+
+On macOS:
+
+```bash
+brew install pango libffi
+```

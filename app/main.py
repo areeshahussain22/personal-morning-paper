@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_http_logging
 from app.repositories.database import Database
 from app.repositories.profile_repository import ProfileRepository
+from app.services.pdf import build_pdf
 
 settings = get_settings()
 configure_http_logging()
@@ -95,6 +96,22 @@ def today_edition(request: Request) -> Response:
     if not request.session.get("user_id"):
         return RedirectResponse("/")
     return templates.TemplateResponse(request=request, name="edition.html", context=_edition_context(request, datetime.now(timezone.utc).date().isoformat()))
+
+
+@app.get("/edition/{edition_date}/pdf")
+def edition_pdf(request: Request, edition_date: str) -> Response:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse("/")
+    try:
+        path = build_pdf(_repo(), user_id, edition_date, settings)
+    except LookupError:
+        return Response(status_code=404)
+    return Response(
+        content=path.read_bytes(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="morning-paper-{edition_date}.pdf"'},
+    )
 
 
 @app.get("/edition/{edition_date}")

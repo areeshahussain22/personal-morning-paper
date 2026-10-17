@@ -36,6 +36,10 @@ class Settings:
     ollama_model: str = "llama3.2"
     environment: str = "development"
     session_secret: str | None = None
+    pdf_renderer: str = "auto"
+    public_base_url: str = "http://localhost:8000"
+    pdf_image_timeout_seconds: float = 8.0
+    pdf_image_max_bytes: int = 2 * 1024 * 1024
 
 
 def _load_local_env() -> None:
@@ -91,4 +95,8 @@ def get_settings() -> Settings:
         ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2"),
         environment=os.getenv("ENVIRONMENT", "development"),
         session_secret=os.getenv("SESSION_SECRET"),
+        pdf_renderer=os.getenv("PDF_RENDERER", "auto").lower(),
+        public_base_url=os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"),
+        pdf_image_timeout_seconds=float(os.getenv("PDF_IMAGE_TIMEOUT_SECONDS", "8")),
+        pdf_image_max_bytes=int(os.getenv("PDF_IMAGE_MAX_BYTES", str(2 * 1024 * 1024))),
     )

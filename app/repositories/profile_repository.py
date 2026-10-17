@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import secrets
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -242,27 +243,32 @@ class ProfileRepository:
             score = detail.get("reliability_score", 0)
             enriched["reliability_label"] = "high" if score >= 0.85 else "medium" if score >= 0.65 else "lower"
             enriched["out_token"] = self.get_or_create_token(
-                user_id, item["article_id"], result["edition_id"], item["position"], detail.get("source_id", "")
+                user_id, item["article_id"], result["edition_id"], item["position"], detail.get("source_id", ""), "web"
             )
             render_items.append(enriched)
         result["render_items"] = render_items
         return result
 
-    def get_or_create_token(self, user_id: str, article_id: str, edition_id: str, position: int, source_id: str) -> str:
+    def get_or_create_token(
+        self, user_id: str, article_id: str, edition_id: str, position: int,
+        source_id: str, token_source: str = "web",
+    ) -> str:
+        lookup_source_id = source_id if token_source == "web" else f"{source_id}:{token_source}"
         with self.database.connect() as db:
             row = db.execute(
                 """SELECT token FROM link_tokens
-                   WHERE user_id=? AND article_id=? AND edition_id=? AND position=? AND source_id=?""",
-                (user_id, article_id, edition_id, position, source_id),
+                   WHERE user_id=? AND article_id=? AND edition_id=? AND position=?
+                     AND source_id=? AND token_source=?""",
+                (user_id, article_id, edition_id, position, lookup_source_id, token_source),
             ).fetchone()
             if row:
                 return row["token"]
             token = secrets.token_urlsafe(32)
             db.execute(
                 """INSERT INTO link_tokens
-                   (token,user_id,article_id,edition_id,position,source_id,created_at)
-                   VALUES (?,?,?,?,?,?,?)""",
-                (token, user_id, article_id, edition_id, position, source_id, to_db_time(utc_now())),
+                   (token,user_id,article_id,edition_id,position,source_id,token_source,created_at)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (token, user_id, article_id, edition_id, position, lookup_source_id, token_source, to_db_time(utc_now())),
             )
             return token
 
@@ -273,6 +279,21 @@ class ProfileRepository:
                 (token,),
             ).fetchone()
         return row["original_url"] if row else None
+
+    def set_pdf_status(self, edition_id: str, status: str, path: str | None = None) -> None:
+        with self.database.connect() as db:
+            db.execute(
+                "UPDATE editions SET pdf_status=?, pdf_path=?, pdf_rendered_at=? WHERE edition_id=?",
+                (status, path, to_db_time(utc_now()) if status == "ready" else None, edition_id),
+            )
+
+    def edition_pdf_metadata(self, user_id: str, edition_date: str) -> dict | None:
+        with self.database.connect() as db:
+            row = db.execute(
+                "SELECT edition_id, pdf_status, pdf_path, pdf_rendered_at FROM editions "
+                "WHERE user_id=? AND edition_date=?", (user_id, edition_date)
+            ).fetchone()
+        return dict(row) if row else None
 
     def list_editions(self, user_id: str) -> list[dict]:
         with self.database.connect() as db:
@@ -313,6 +334,9 @@ class ProfileRepository:
             if existing and not force:
                 return existing["edition_id"]
             if existing:
+                old_pdf = db.execute("SELECT pdf_path FROM editions WHERE edition_id=?", (existing["edition_id"],)).fetchone()
+                if old_pdf and old_pdf["pdf_path"]:
+                    Path(old_pdf["pdf_path"]).unlink(missing_ok=True)
                 db.execute("DELETE FROM editions WHERE edition_id = ?", (existing["edition_id"],))
                 db.execute("UPDATE users SET editions_read = MAX(0, editions_read - 1) WHERE user_id = ?", (user_id,))
             db.execute(
