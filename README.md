@@ -517,3 +517,30 @@ template is used.
 The profile page supports editing or regenerating the summary, resetting learned
 preferences to the onboarding baseline, and deleting account data. Deletion
 removes the user and its cascaded editions, events, tokens, and profile records.
+
+## Scheduler and jobs
+
+Install dependencies, then run the long-lived scheduler from the repository root:
+
+```powershell
+.venv\Scripts\python.exe -m app.cli scheduler
+```
+
+On Linux or macOS, use `.venv/bin/python -m app.cli scheduler`. The scheduler
+ingests and enriches the article pool every three hours by default, processes
+pending events before due reader editions, refreshes summaries weekly, and
+creates the nightly archive snapshot. Configure `SCHEDULER_INTERVAL_HOURS` and
+`SCHEDULER_LEAD_MINUTES` (default 60) in `.env`. Free hosts may sleep, so
+startup catch-up and first-visit generation recover missed editions.
+
+Useful one-shot commands:
+
+```powershell
+.venv\Scripts\python.exe -m app.cli generate-all --date 2026-10-17 --no-llm
+.venv\Scripts\python.exe -m app.cli status
+```
+
+Each run is recorded in the `job_runs` table with its key, status, timestamps,
+error, and JSON statistics. Jobs coalesce missed intervals, allow one instance
+at a time, and isolate reader failures. The development-only `/api/admin/jobs`
+endpoint requires the configured `ADMIN_TOKEN`.

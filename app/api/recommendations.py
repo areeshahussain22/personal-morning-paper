@@ -154,6 +154,9 @@ async def generate_edition(
     use_llm: bool = True,
 ) -> dict:
     service, client = edition_service(use_llm)
+    repo = repository()
+    date_value = (edition_date or date.today()).isoformat()
+    repo.set_generation_status(user_id, date_value, "running", "selecting")
     try:
         if client is not None:
             async with client:
@@ -163,9 +166,14 @@ async def generate_edition(
         background_tasks.add_task(
             build_pdf, repository(), user_id, (edition_date or date.today()).isoformat(), get_settings()
         )
+        repo.set_generation_status(user_id, date_value, "ready", "ready")
         return result
     except LookupError as exc:
+        repo.set_generation_status(user_id, date_value, "failed", "failed", str(exc)[:500])
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        repo.set_generation_status(user_id, date_value, "failed", "failed", str(exc)[:500])
+        raise
 
 
 @router.get("/users/{user_id}/editions")

@@ -49,6 +49,11 @@ class Settings:
     exploration_base: float = 0.40
     exploration_decay: float = 0.05
     exploration_top_topics: int = 3
+    scheduler_interval_hours: int = 3
+    scheduler_lead_minutes: int = 60
+    scheduler_misfire_grace_seconds: int = 900
+    scheduler_max_workers: int = 4
+    admin_token: str | None = None
 
 
 def _load_local_env() -> None:
@@ -117,4 +122,9 @@ def get_settings() -> Settings:
         exploration_base=float(os.getenv("EXPLORATION_BASE", "0.40")),
         exploration_decay=float(os.getenv("EXPLORATION_DECAY", "0.05")),
         exploration_top_topics=int(os.getenv("EXPLORATION_TOP_TOPICS", "3")),
+        scheduler_interval_hours=int(os.getenv("SCHEDULER_INTERVAL_HOURS", "3")),
+        scheduler_lead_minutes=int(os.getenv("SCHEDULER_LEAD_MINUTES", "60")),
+        scheduler_misfire_grace_seconds=int(os.getenv("SCHEDULER_MISFIRE_GRACE_SECONDS", "900")),
+        scheduler_max_workers=int(os.getenv("SCHEDULER_MAX_WORKERS", "4")),
+        admin_token=os.getenv("ADMIN_TOKEN"),
     )

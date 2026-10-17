@@ -102,6 +102,18 @@ class Database:
                     updated_at TEXT NOT NULL,
                     PRIMARY KEY (user_id, edition_date)
                 );
+                CREATE TABLE IF NOT EXISTS job_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job TEXT NOT NULL,
+                    run_key TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    error TEXT,
+                    stats_json TEXT NOT NULL DEFAULT '{}',
+                    UNIQUE(job, run_key)
+                );
+                CREATE INDEX IF NOT EXISTS idx_job_runs_started ON job_runs(started_at);
                 CREATE TABLE IF NOT EXISTS user_topic_preferences (
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
                     topic TEXT NOT NULL,
@@ -257,6 +269,12 @@ class Database:
             connection.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_editions_user_date ON editions(user_id, edition_date)"
             )
+
+    def read_job_runs(self, limit: int = 50) -> list[dict]:
+        with self.connect() as connection:
+            return [dict(row) for row in connection.execute(
+                "SELECT * FROM job_runs ORDER BY started_at DESC LIMIT ?", (min(max(limit, 1), 200),)
+            )]
 
     @staticmethod
     def _add_column_if_missing(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:

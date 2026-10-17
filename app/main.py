@@ -13,6 +13,7 @@ from app.api.onboarding import router as onboarding_router
 from app.api.recommendations import router as recommendations_router
 from app.api.events import router as events_router
 from app.api.profile import router as profile_router
+from app.api.jobs import router as jobs_router
 from app.core.config import get_settings
 from app.core.logging import configure_http_logging
 from app.repositories.database import Database
@@ -42,6 +43,7 @@ app.include_router(recommendations_router)
 app.include_router(onboarding_router)
 app.include_router(events_router)
 app.include_router(profile_router)
+app.include_router(jobs_router)
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 app.state.templates = templates

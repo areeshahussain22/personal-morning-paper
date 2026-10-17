@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from datetime import date
 
@@ -106,7 +107,7 @@ async def generate_edition(user_id: str, edition_date: str, use_llm: bool, force
     return 0
 
 
-async def generate_all(use_llm: bool, force: bool) -> int:
+async def generate_all(use_llm: bool, force: bool, edition_date: str | None = None) -> int:
     settings = get_settings()
     database = Database(settings.database_path)
     with database.connect() as db:
@@ -135,7 +136,7 @@ async def generate_all(use_llm: bool, force: bool) -> int:
         else:
             await service.ensure_summaries(selected)
     for user_id in user_ids:
-        await generate_edition(user_id, date.today().isoformat(), use_llm, force)
+        await generate_edition(user_id, edition_date or date.today().isoformat(), use_llm, force)
     return 0
 
 
@@ -151,7 +152,7 @@ async def generate_summary(user_id: str, force: bool) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary"])
+    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary", "scheduler", "status"])
     parser.add_argument("--user-id")
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--no-llm", action="store_true")
@@ -177,8 +178,18 @@ def main() -> None:
         if not args.user_id:
             parser.error("--user-id is required for generate-summary")
         code = asyncio.run(generate_summary(args.user_id, args.force))
+    elif args.command == "scheduler":
+        from app.services.scheduler import scheduler_main
+        scheduler_main()
+        code = 0
+    elif args.command == "status":
+        from app.services.scheduler import JobRunner
+        runner = JobRunner(Database(get_settings().database_path))
+        for run in runner.database.read_job_runs():
+            print(json.dumps(run))
+        code = 0
     else:
-        code = asyncio.run(generate_all(not args.no_llm, args.force))
+        code = asyncio.run(generate_all(not args.no_llm, args.force, args.date))
     raise SystemExit(code)
 
 

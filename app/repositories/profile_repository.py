@@ -195,6 +195,12 @@ class ProfileRepository:
             ).fetchone()
         return dict(row) if row else None
 
+    def job_runs(self, limit: int = 50) -> list[dict]:
+        with self.database.connect() as db:
+            return [dict(row) for row in db.execute(
+                "SELECT * FROM job_runs ORDER BY started_at DESC LIMIT ?", (min(max(limit, 1), 200),)
+            )]
+
     def save_edition(self, user_id: str, result: dict) -> str:
         edition_id = uuid4().hex
         with self.database.connect() as db:
