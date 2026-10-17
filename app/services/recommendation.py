@@ -79,14 +79,15 @@ class RecommendationService:
                 "SELECT topic, confidence FROM article_topics WHERE article_id = ? ORDER BY confidence DESC",
                 (article["article_id"],),
             ).fetchall()
-        if cached is not None and cached_topics and (
+        if cached is not None and (
             self.embedder is None or (
                 cached["embedder_name"] == self.embedder.name
                 and cached["dimensions"] == self.embedder.dimension
             )
         ):
             article["_embedder_name"] = cached["embedder_name"]
-            return article, [item["topic"] for item in cached_topics[:2]], json.loads(cached["vector_json"])
+            topics = [item["topic"] for item in cached_topics[:2]] or [article["topic"]]
+            return article, topics, json.loads(cached["vector_json"])
         if self.embedder is None:
             return article, [], []
         text = f"{article['title']} {article.get('description') or ''}"
