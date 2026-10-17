@@ -62,6 +62,7 @@ class Database:
                     last_updated_at TEXT NOT NULL,
                     publication_date_issue TEXT
                 );
+                CREATE INDEX IF NOT EXISTS idx_articles_canonical_url ON articles(canonical_url);
                 CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(published_at);
                 CREATE INDEX IF NOT EXISTS idx_articles_topic ON articles(topic);
                 CREATE INDEX IF NOT EXISTS idx_articles_source_id ON articles(source_id);
@@ -120,6 +121,20 @@ class Database:
                     created_at TEXT NOT NULL,
                     result_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS edition_items (
+                    edition_id TEXT NOT NULL REFERENCES editions(edition_id) ON DELETE CASCADE,
+                    article_id TEXT NOT NULL REFERENCES articles(article_id),
+                    position INTEGER NOT NULL,
+                    is_lead INTEGER NOT NULL DEFAULT 0,
+                    selection_group TEXT NOT NULL,
+                    headline TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    reason_code TEXT NOT NULL,
+                    reason_text TEXT NOT NULL,
+                    score REAL NOT NULL,
+                    score_components_json TEXT NOT NULL,
+                    PRIMARY KEY (edition_id, article_id)
+                );
                 CREATE TABLE IF NOT EXISTS edition_articles (
                     edition_id TEXT NOT NULL REFERENCES editions(edition_id) ON DELETE CASCADE,
                     article_id TEXT NOT NULL REFERENCES articles(article_id),
@@ -159,6 +174,18 @@ class Database:
             self._add_column_if_missing(connection, "users", "vector_embedder", "TEXT")
             self._add_column_if_missing(connection, "users", "vector_dimension", "INTEGER")
             self._add_column_if_missing(connection, "article_embeddings", "embedder_name", "TEXT")
+            self._add_column_if_missing(connection, "articles", "summary", "TEXT")
+            self._add_column_if_missing(connection, "articles", "summary_source", "TEXT")
+            self._add_column_if_missing(connection, "articles", "summary_provider", "TEXT")
+            self._add_column_if_missing(connection, "articles", "summary_model", "TEXT")
+            self._add_column_if_missing(connection, "editions", "edition_date", "TEXT")
+            self._add_column_if_missing(connection, "editions", "layout_source", "TEXT")
+            self._add_column_if_missing(connection, "editions", "layout_provider", "TEXT")
+            self._add_column_if_missing(connection, "editions", "layout_model", "TEXT")
+            self._add_column_if_missing(connection, "editions", "stage_timings_json", "TEXT")
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_editions_user_date ON editions(user_id, edition_date)"
+            )
 
     @staticmethod
     def _add_column_if_missing(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:

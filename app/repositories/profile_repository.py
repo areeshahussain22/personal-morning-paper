@@ -91,7 +91,10 @@ class ProfileRepository:
     def save_edition(self, user_id: str, result: dict) -> str:
         edition_id = uuid4().hex
         with self.database.connect() as db:
-            db.execute("INSERT INTO editions VALUES (?, ?, ?, ?)", (edition_id, user_id, to_db_time(utc_now()), json.dumps(result)))
+            db.execute(
+                "INSERT INTO editions (edition_id, user_id, created_at, result_json) VALUES (?, ?, ?, ?)",
+                (edition_id, user_id, to_db_time(utc_now()), json.dumps(result)),
+            )
             for group in ("must_know", "exploration", "regular"):
                 for item in result[group]:
                     db.execute("INSERT INTO edition_articles VALUES (?, ?, ?, ?)",
@@ -119,3 +122,107 @@ class ProfileRepository:
         result["edition_id"] = row["edition_id"]
         result["created_at"] = row["created_at"]
         return result
+
+    def edition_for_date(self, user_id: str, edition_date: str) -> dict | None:
+        with self.database.connect() as db:
+            row = db.execute(
+                "SELECT edition_id, result_json, created_at, edition_date FROM editions "
+                "WHERE user_id = ? AND edition_date = ?",
+                (user_id, edition_date),
+            ).fetchone()
+        if row is None:
+            return None
+        result = json.loads(row["result_json"])
+        result.update(
+            {
+                "edition_id": row["edition_id"],
+                "created_at": row["created_at"],
+                "edition_date": row["edition_date"],
+            }
+        )
+        return result
+
+    def list_editions(self, user_id: str) -> list[dict]:
+        with self.database.connect() as db:
+            rows = db.execute(
+                "SELECT edition_id, edition_date, created_at, layout_source, result_json "
+                "FROM editions WHERE user_id = ? ORDER BY COALESCE(edition_date, created_at) DESC",
+                (user_id,),
+            ).fetchall()
+        return [
+            {
+                "edition_id": row["edition_id"],
+                "edition_date": row["edition_date"],
+                "created_at": row["created_at"],
+                "layout_source": row["layout_source"],
+                "result": json.loads(row["result_json"]),
+            }
+            for row in rows
+        ]
+
+    def save_generated_edition(
+        self,
+        user_id: str,
+        edition_date: str,
+        result: dict,
+        items: list[dict],
+        layout_source: str,
+        layout_provider: str | None,
+        layout_model: str | None,
+        stage_timings: dict[str, int],
+        force: bool = False,
+    ) -> str:
+        edition_id = uuid4().hex
+        with self.database.connect() as db:
+            existing = db.execute(
+                "SELECT edition_id FROM editions WHERE user_id = ? AND edition_date = ?",
+                (user_id, edition_date),
+            ).fetchone()
+            if existing and not force:
+                return existing["edition_id"]
+            if existing:
+                db.execute("DELETE FROM editions WHERE edition_id = ?", (existing["edition_id"],))
+                db.execute("UPDATE users SET editions_read = MAX(0, editions_read - 1) WHERE user_id = ?", (user_id,))
+            db.execute(
+                """INSERT INTO editions
+                   (edition_id, user_id, created_at, result_json, edition_date, layout_source,
+                    layout_provider, layout_model, stage_timings_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    edition_id,
+                    user_id,
+                    to_db_time(utc_now()),
+                    json.dumps(result),
+                    edition_date,
+                    layout_source,
+                    layout_provider,
+                    layout_model,
+                    json.dumps(stage_timings),
+                ),
+            )
+            for item in items:
+                db.execute(
+                    """INSERT INTO edition_items
+                       (edition_id, article_id, position, is_lead, selection_group, headline,
+                        summary, reason_code, reason_text, score, score_components_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        edition_id,
+                        item["article_id"],
+                        item["position"],
+                        int(item["position"] == 1),
+                        item["selection_group"],
+                        item["headline"],
+                        item["summary"],
+                        item["reason_code"],
+                        item["reason_text"],
+                        item["score"],
+                        json.dumps(item["score_components"]),
+                    ),
+                )
+                db.execute(
+                    "INSERT INTO edition_articles VALUES (?, ?, ?, ?)",
+                    (edition_id, item["article_id"], item["selection_group"], item["reason_code"]),
+                )
+            db.execute("UPDATE users SET editions_read = editions_read + 1 WHERE user_id = ?", (user_id,))
+        return edition_id
