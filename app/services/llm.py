@@ -125,7 +125,12 @@ class LLMClient:
                     provider.name, provider.model, purpose, False,
                     type(exc).__name__, 0, len(prompt),
                 )
-                logger.warning("LLM provider failed: provider=%s purpose=%s error=%s", provider.name, purpose, exc)
+                logger.warning(
+                    "LLM provider failed: provider=%s purpose=%s error_type=%s",
+                    provider.name,
+                    purpose,
+                    type(exc).__name__,
+                )
         raise LLMUnavailable(f"No configured LLM provider completed purpose={purpose}: {last_error}")
 
     async def _call_provider(
@@ -196,7 +201,7 @@ class LLMClient:
         else:
             response = await self._client.post(
                 f"{provider.base_url.rstrip('/')}/chat/completions",
-                headers={"Authorization": f"Bearer {provider.api_key}"},
+                headers={"Authorization": "Bearer " + (provider.api_key or "")},
                 json={"model": provider.model, "temperature": 0, "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
