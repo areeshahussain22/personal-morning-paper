@@ -3,7 +3,7 @@
 {% block title %}{{ edition.edition_date }} · Personal Morning Paper{% endblock %}
 {% block content %}
 <header class="edition-heading"><p class="kicker">Edition {{ edition_number }} · {{ edition.edition_date }}</p><h1>{{ reader_name }}'s morning paper</h1><p class="lede">Stories selected for your interests, with context from trusted sources.</p></header>
-{% if edition.items %}<p><a class="secondary" href="/edition/{{ edition.edition_date }}/pdf">Download PDF</a></p>{% endif %}
+{% if edition["items"] %}<p><a class="secondary" href="/edition/{{ edition.edition_date }}/pdf">Download PDF</a></p>{% endif %}
 {% if edition.render_items %}
   {% set lead = edition.render_items[0] %}
   <section class="lead-story" aria-labelledby="lead-headline">{{ story_card(lead) }}</section>
@@ -14,9 +14,15 @@
 {% else %}
 <section class="empty-state card" aria-live="polite">
   {% if generation and generation.status == "failed" %}
-    <p class="kicker">Paper delayed</p>
-    <h2>We’re still preparing your paper.</h2>
-    <p>The newsroom will retry automatically. Please check back shortly.</p>
+    {% if generation.error and "No eligible articles" in generation.error %}
+      <p class="kicker">No fresh stories yet</p>
+      <h2>Your next paper is waiting for new articles.</h2>
+      <p>The newsroom will check again automatically. Your previous papers are available in the archive.</p>
+    {% else %}
+      <p class="kicker">Paper delayed</p>
+      <h2>We’re still preparing your paper.</h2>
+      <p>The newsroom will retry automatically. Please check back shortly.</p>
+    {% endif %}
   {% elif generation and generation.status in ["queued", "running"] %}
     <p class="kicker">Paper in preparation</p>
     <h2>Your paper is being prepared.</h2>
