@@ -152,7 +152,7 @@ async def generate_summary(user_id: str, force: bool) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary", "scheduler", "status"])
+    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary", "scheduler", "run-once", "status"])
     parser.add_argument("--user-id")
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--no-llm", action="store_true")
@@ -181,6 +181,13 @@ def main() -> None:
     elif args.command == "scheduler":
         from app.services.scheduler import scheduler_main
         scheduler_main()
+        code = 0
+    elif args.command == "run-once":
+        from app.services.scheduler import JobRunner
+        runner = JobRunner(Database(get_settings().database_path))
+        asyncio.run(runner.ingest_and_enrich())
+        asyncio.run(runner.generate_due())
+        runner.nightly_archive()
         code = 0
     elif args.command == "status":
         from app.services.scheduler import JobRunner
