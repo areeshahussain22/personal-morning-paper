@@ -138,6 +138,15 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics(topic);
                 """
             )
+            self._add_column_if_missing(connection, "users", "vector_embedder", "TEXT")
+            self._add_column_if_missing(connection, "users", "vector_dimension", "INTEGER")
+            self._add_column_if_missing(connection, "article_embeddings", "embedder_name", "TEXT")
+
+    @staticmethod
+    def _add_column_if_missing(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def upsert_source(self, source: Any) -> None:
         with self.connect() as connection:

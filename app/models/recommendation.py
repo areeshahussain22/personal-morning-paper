@@ -11,6 +11,8 @@ class ProfilePreferences:
     long_vector: list[float] | None = None
     short_vector: list[float] | None = None
     editions_read: int = 0
+    embedder_name: str | None = None
+    vector_dimension: int | None = None
 
 
 @dataclass(frozen=True)

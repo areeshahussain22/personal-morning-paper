@@ -13,11 +13,19 @@ class ProfileRepository:
         self.database = database
         self.database.initialize()
 
-    def create_user(self, name: str, topic_weights: dict, source_weights: dict, muted_topics: list[str]) -> str:
+    def create_user(
+        self, name: str, topic_weights: dict, source_weights: dict, muted_topics: list[str],
+        vector: list[float] | None = None, embedder_name: str | None = None,
+    ) -> str:
         user_id = uuid4().hex
         with self.database.connect() as db:
-            db.execute("INSERT INTO users (user_id, name, created_at, editions_read) VALUES (?, ?, ?, 0)",
-                       (user_id, name, to_db_time(utc_now())))
+            db.execute(
+                """INSERT INTO users
+                   (user_id, name, created_at, editions_read, long_vector, short_vector, vector_embedder, vector_dimension)
+                   VALUES (?, ?, ?, 0, ?, ?, ?, ?)""",
+                (user_id, name, to_db_time(utc_now()), json.dumps(vector) if vector else None,
+                 json.dumps(vector) if vector else None, embedder_name, len(vector) if vector else None),
+            )
             self._replace_preferences(db, user_id, topic_weights, source_weights, muted_topics)
         return user_id
 
@@ -38,6 +46,15 @@ class ProfileRepository:
             self._replace_preferences(db, user_id, topics, sources, muted)
         return True
 
+    def set_vectors(self, user_id: str, vector: list[float], embedder_name: str) -> bool:
+        with self.database.connect() as db:
+            cursor = db.execute(
+                """UPDATE users SET long_vector = ?, short_vector = ?, vector_embedder = ?,
+                   vector_dimension = ? WHERE user_id = ?""",
+                (json.dumps(vector), json.dumps(vector), embedder_name, len(vector), user_id),
+            )
+        return cursor.rowcount > 0
+
     def get_profile(self, user_id: str) -> dict | None:
         with self.database.connect() as db:
             user = db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
@@ -51,6 +68,8 @@ class ProfileRepository:
                 "topic_weights": {row["topic"]: row["weight"] for row in topics},
                 "source_weights": {row["source_id"]: row["weight"] for row in sources},
                 "muted_topics": [row["topic"] for row in muted],
+                "vector_embedder": user["vector_embedder"],
+                "vector_dimension": user["vector_dimension"],
             }
 
     def get_preferences(self, user_id: str):
@@ -65,6 +84,8 @@ class ProfileRepository:
             editions_read=profile["editions_read"],
             long_vector=json.loads(profile["long_vector"]) if profile["long_vector"] else None,
             short_vector=json.loads(profile["short_vector"]) if profile["short_vector"] else None,
+            embedder_name=profile["vector_embedder"],
+            vector_dimension=profile["vector_dimension"],
         )
 
     def save_edition(self, user_id: str, result: dict) -> str:
