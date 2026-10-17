@@ -215,6 +215,9 @@ class EditionService:
                         if article_id in section["article_ids"]
                     ),
                     "summary": row.get("summary") or _clean_snippet(row.get("description")),
+                    "summary_source": row.get("summary_source") or "snippet",
+                    "summary_provider": row.get("summary_provider"),
+                    "summary_model": row.get("summary_model"),
                     "reason_code": item.reason_code,
                     "reason_text": next(
                         section["why_lines"][article_id]
@@ -229,11 +232,14 @@ class EditionService:
         result = {
             "edition_date": edition_date,
             "layout_source": layout_source,
+            "layout_provider": layout_provider,
+            "layout_model": layout_model,
             "lead_id": layout["lead_id"],
             "sections": layout["sections"],
             "items": items,
         }
         timings = {"total": int((time.perf_counter() - started) * 1000)}
+        result["stage_timings"] = timings
         edition_id = self.profiles.save_generated_edition(
             user_id, edition_date, result, items, layout_source, layout_provider, layout_model, timings, force
         )
