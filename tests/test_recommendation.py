@@ -121,6 +121,27 @@ def test_filters_selection_and_snapshot_result(tmp_path: Path) -> None:
     assert title_similarity("AI software breakthrough", "AI software related update") > 0.3
 
 
+def test_preview_uses_profile_edition_size_by_default(tmp_path: Path) -> None:
+    database, user_id = seed_database(tmp_path / "recommendations.db")
+    repo = ProfileRepository(database)
+    assert repo.update_settings(
+        user_id,
+        {
+            "depth": "standard",
+            "edition_size": 2,
+            "surprise_level": "medium",
+            "exploration_floor": 0.15,
+            "timezone": "UTC",
+            "delivery_time": "07:00",
+            "display_name": "Demo",
+        },
+    )
+    profile = repo.get_preferences(user_id)
+    assert profile is not None
+    result = RecommendationService(database).preview(user_id, profile)
+    assert len(result.must_know + result.exploration + result.regular) == 2
+
+
 def test_muted_topics_and_previous_editions_are_excluded(tmp_path: Path) -> None:
     database, user_id = seed_database(tmp_path / "recommendations.db")
     repo = ProfileRepository(database)

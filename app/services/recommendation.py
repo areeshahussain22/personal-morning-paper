@@ -138,7 +138,9 @@ class RecommendationService:
                    WHERE e.user_id = ? ORDER BY e.created_at DESC LIMIT 7""", (user_id,)
             )}
 
-    def preview(self, user_id: str, profile: ProfilePreferences, edition_size: int = 10) -> RecommendationResult:
+    def preview(
+        self, user_id: str, profile: ProfilePreferences, edition_size: int | None = None
+    ) -> RecommendationResult:
         candidates: list[ScoredArticle] = []
         now = utc_now()
         for raw in self._eligible_rows(profile, user_id):
@@ -162,12 +164,15 @@ class RecommendationService:
             text = f"Because you read about {topic}" if code == "topic_interest" else "Top story today"
             candidates.append(ScoredArticle(article, score, components, tuple(topics), code, text))
         candidates.sort(key=lambda item: item.score, reverse=True)
-        must_know = self._must_know(candidates)
+        requested_size = profile.edition_size if edition_size is None else edition_size
+        edition_size = min(requested_size, profile.edition_size)
+        must_know = self._must_know(candidates, edition_size)
         selected_ids = {item.article["article_id"] for item in must_know}
         remaining = [item for item in candidates if item.article["article_id"] not in selected_ids]
-        edition_size = min(edition_size, profile.edition_size)
         exploration_count = min(
-            len(remaining), round(edition_size * exploration_share(profile.editions_read, profile.exploration_floor))
+            len(remaining),
+            max(0, edition_size - len(must_know)),
+            round(edition_size * exploration_share(profile.editions_read, profile.exploration_floor)),
         )
         outside = [item for item in remaining if not set(item.topics) & set(sorted(profile.topic_weights, key=profile.topic_weights.get, reverse=True)[:3])]
         exploration = [self._with_reason(item, "exploration", f"Something new: {item.topics[0] if item.topics else item.article['topic']}") for item in outside[:exploration_count]]
@@ -240,13 +245,13 @@ class RecommendationService:
             ).fetchone()
         return int(row["cluster_size"]) if row else 1
 
-    def _must_know(self, candidates: list[ScoredArticle]) -> list[ScoredArticle]:
+    def _must_know(self, candidates: list[ScoredArticle], edition_size: int) -> list[ScoredArticle]:
         ordered = sorted(candidates, key=lambda item: item.components["C"], reverse=True)
         chosen = []
         for candidate in ordered:
             if all(title_similarity(candidate.article["title"], other.article["title"]) < 0.45 for other in chosen):
                 chosen.append(self._with_reason(candidate, "must_know", "Top story today"))
-            if len(chosen) == min(2, len(candidates)):
+            if len(chosen) == min(2, edition_size, len(candidates)):
                 break
         return chosen
 
