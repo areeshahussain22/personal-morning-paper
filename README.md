@@ -192,6 +192,64 @@ The schema is initialized safely on application access using `CREATE TABLE IF
 NOT EXISTS`; it does not delete existing article data. Future migrations can
 replace this initializer if schema evolution becomes more complex.
 
+## Embedding backends and enrichment
+
+The `Embedder` interface in
+[`app/services/embeddings.py`](app/services/embeddings.py) supports:
+
+- `sentence_transformer` (the normal-run default): lazy
+  `all-MiniLM-L6-v2` local semantic embeddings, normalized and encoded in CPU
+  batches. The first use downloads approximately 80 MB of model weights. The
+  Hugging Face cache is outside the repository (normally
+  `%USERPROFILE%\.cache\huggingface`) and is not committed.
+- `hashed`: deterministic, lightweight offline vectors used by the test suite
+  and as an explicit fallback. They are not semantic model embeddings.
+
+Install the real backend with the project requirements:
+
+```powershell
+python -m pip install -r requirements.txt
+$env:EMBEDDING_BACKEND = "sentence_transformer"
+$env:EMBEDDING_ALLOW_FALLBACK = "false"
+python scripts/embed_articles.py
+```
+
+`sentence-transformers` installs the PyTorch stack and is substantially
+heavier than the base project. If model download or dependency installation is
+not practical, use the explicit offline backend:
+
+```powershell
+$env:EMBEDDING_BACKEND = "hashed"
+python scripts/embed_articles.py
+```
+
+`EMBEDDING_ALLOW_FALLBACK=true` opts into a visible warning and hashed fallback
+when the sentence-transformer backend cannot load. There is no silent fallback.
+Every stored article and user vector records its embedder name and dimension;
+vectors from different backends cannot be compared. Use `--reembed` when
+switching backends:
+
+```powershell
+python scripts/embed_articles.py --reembed
+```
+
+Embedding and clustering are enrichment operations, not recommendation request
+work. The command stores article vectors, deterministic topic assignments, and
+36-hour-window story clusters. Cluster size is the number of distinct source
+outlets in a cluster. Topic and cluster thresholds are configurable separately:
+the initial hashed baselines are `0.12` and `0.45`; the initial
+sentence-transformer values are `0.45` and `0.72`. These were chosen from
+small reviewable examples covering exact topical headlines, semantically
+related wording, and unrelated sports/world headlines; they are starting
+calibration values and should be rechecked against production feeds.
+
+The slow semantic integration test is skipped by default because it downloads
+model weights. Run it explicitly after installation with:
+
+```powershell
+python -m pytest tests/test_recommendation.py -m slow
+```
+
 ## Run the application
 
 ```powershell

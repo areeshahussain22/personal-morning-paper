@@ -14,6 +14,10 @@ htmlcov/
 logs/
 generated/
 data/
+huggingface/
+transformers_cache/
+.cache/
+*.safetensors
 .vscode/
 .idea/
 *.log
