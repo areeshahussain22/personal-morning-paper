@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.ingestion import router as ingestion_router
+from app.api.recommendations import router as recommendations_router
 
 app = FastAPI(
     title="Personal Morning Paper",
@@ -8,6 +9,7 @@ app = FastAPI(
     version="0.1.0",
 )
 app.include_router(ingestion_router)
+app.include_router(recommendations_router)
 
 
 @app.get("/")

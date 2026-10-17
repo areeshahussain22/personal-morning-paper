@@ -127,6 +127,71 @@ Known limitations: feed availability and publisher schemas can change, the
 initial registry contains starting reliability estimates, and no full article
 text is fetched. Live websites are not used by the automated tests.
 
+## Profiles and recommendations
+
+Profiles are stored separately from global article data. A user has topic
+weights, source weights, muted topics, and an edition-read count. Onboarding
+weights are represented as selected topic `3`, selected sub-interest `2`,
+user-entered tag `2`, and unselected topics `0`. Preferences can be changed
+through the API without changing the schema.
+
+The local recommendation service uses deterministic hashed word vectors rather
+than a downloaded model. This keeps tests offline and installation lightweight;
+it is an extensible baseline, not a replacement for a future higher-quality
+embedding model. Article vectors and up to two deterministic topic assignments
+are cached in SQLite. Topic assignment uses configurable keyword descriptions
+and a confidence threshold.
+
+For each eligible article, the default score is:
+
+```text
+T = tanh(topic_weight / 4)
+E = 0.6 * cosine(U_long, article_embedding) + 0.4 * cosine(U_short, article_embedding)
+S = clamp(tanh(source_weight / 4), -0.3, 0.3)
+C = min(1, log2(cluster_size) / 3)
+F = exp(-age_hours / 18)
+score = (0.40*T + 0.35*E + 0.10*S + 0.15*C) * F * (0.5 + 0.5*reliability)
+```
+
+Missing vectors and weights safely contribute zero. Scores expose all
+components for debugging. Before scoring, recommendations exclude articles
+older than 48 hours, sources below reliability `0.3`, articles in the user's
+last seven editions, muted topics, and invalid publication records.
+
+Selection returns up to two must-know stories, a deterministic exploration
+slice using `epsilon = max(0.15, 0.40 - 0.05 * editions_read)`, and regular
+MMR-ranked stories. MMR subtracts `0.3 * max_similarity` from relevance, and a
+40% topic cap is applied when the candidate pool allows it. Exploration is a
+deterministic fallback until real click/view events exist; Thompson sampling is
+intentionally deferred to the learning-loop phase.
+
+Create a demo profile and preview recommendations:
+
+```powershell
+$user = Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/users `
+  -ContentType 'application/json' `
+  -Body '{"name":"Demo Reader","selected_topics":["technology_ai"],"selected_sub_interests":["science_research"],"interest_tags":["robotics"]}'
+$userId = $user.user_id
+Invoke-RestMethod http://127.0.0.1:8000/api/users/$userId/preferences
+Invoke-RestMethod -Method Post "http://127.0.0.1:8000/api/users/$userId/recommendations/preview?edition_size=10"
+Invoke-RestMethod http://127.0.0.1:8000/api/users/$userId/recommendations
+```
+
+Recommendation endpoints:
+
+- `GET /api/topics` lists topic names and descriptions.
+- `POST /api/users` creates a profile with onboarding preferences.
+- `GET /api/users/{user_id}/preferences` reads preferences.
+- `PUT /api/users/{user_id}/preferences` updates weights and muted topics.
+- `POST /api/users/{user_id}/recommendations/preview` generates and persists an
+  explainable edition.
+- `GET /api/users/{user_id}/recommendations` retrieves the latest persisted
+  edition.
+
+The schema is initialized safely on application access using `CREATE TABLE IF
+NOT EXISTS`; it does not delete existing article data. Future migrations can
+replace this initializer if schema evolution becomes more complex.
+
 ## Run the application
 
 ```powershell
