@@ -8,7 +8,7 @@
 <polyline fill="none" stroke="#0b7285" stroke-width="3" points="{% for row in rows if row.persona == persona %}{{ loop.index0 * 55 + 40 }},{{ 230 - (row.metrics_json|from_json).click_through_rate * 180 }} {% endfor %}"/>
 <text x="20" y="25">Click-through rate</text></svg>
 <svg viewBox="0 0 900 260" role="img" aria-label="{{ persona }} average clicked position">
-<polyline fill="none" stroke="#6741d9" stroke-width="3" points="{% for row in rows if row.persona == persona %}{{ loop.index0 * 55 + 40 }},{{ 230 - ((row.metrics_json|from_json).average_clicked_position|default(0)) * 30 }} {% endfor %}"/>
+<polyline fill="none" stroke="#6741d9" stroke-width="3" points="{% for row in rows if row.persona == persona %}{{ loop.index0 * 55 + 40 }},{{ 230 - ((row.metrics_json|from_json).average_clicked_position|default(0, true)) * 30 }} {% endfor %}"/>
 <text x="20" y="25">Average clicked position</text></svg>
 <svg viewBox="0 0 900 260" role="img" aria-label="{{ persona }} top five hit rate">
 <polyline fill="none" stroke="#d9480f" stroke-width="3" points="{% for row in rows if row.persona == persona %}{{ loop.index0 * 55 + 40 }},{{ 230 - (row.metrics_json|from_json).top5_hit_rate * 180 }} {% endfor %}"/>

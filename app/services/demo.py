@@ -51,7 +51,7 @@ def demo_rows(database: Database) -> list[dict]:
 def demo_front_pages(database: Database) -> dict[str, list[dict]]:
     with database.connect() as connection:
         rows = connection.execute(
-            "SELECT u.name, e.edition_date, a.headline FROM editions e "
+            "SELECT u.name, e.edition_date, a.title AS headline FROM editions e "
             "JOIN users u ON u.user_id=e.user_id "
             "JOIN edition_items ei ON ei.edition_id=e.edition_id "
             "JOIN articles a ON a.article_id=ei.article_id "
