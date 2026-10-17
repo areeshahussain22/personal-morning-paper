@@ -116,6 +116,16 @@ def _template_environment() -> Environment:
     )
 
 
+def _truncate(value: str | None, limit: int) -> str:
+    text = " ".join((value or "").split())
+    if len(text) <= limit:
+        return text
+    sentence = text[:limit].rsplit(". ", 1)[0].strip()
+    if len(sentence) < limit // 2:
+        sentence = text[:limit].rsplit(" ", 1)[0].strip()
+    return sentence.rstrip(".,;: ") + "…"
+
+
 def build_pdf(
     repo: ProfileRepository, user_id: str, edition_date: str, settings: Settings, force: bool = False
 ) -> Path:
@@ -151,13 +161,17 @@ def build_pdf(
                 )
                 item["image_src"] = fetch_image(item.get("image_url"), settings, client)
                 item["source_url"] = f"{settings.public_base_url}/out/{item['pdf_token']}"
+                item["headline"] = _truncate(item.get("headline"), 180)
+                item["summary"] = _truncate(item.get("summary"), 520)
                 items.append(item)
         finally:
             client.close()
         profile = repo.get_profile(user_id) or {}
         html = env.get_template("print.html").render(
             edition=edition, items=items, reader_name=profile.get("settings", {}).get("display_name") or profile.get("name", "Reader"),
-            edition_number=1, public_base_url=settings.public_base_url,
+            edition_number=sum(1 for item in repo.list_editions(user_id) if item["edition_date"] <= edition_date),
+            public_base_url=settings.public_base_url,
+            briefs=items[-3:] if len(items) > 8 else [],
         )
         output.parent.mkdir(parents=True, exist_ok=True)
         temp = output.with_suffix(".tmp")

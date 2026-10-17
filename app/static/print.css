@@ -12,5 +12,8 @@ h1 { font-size: 30pt; margin: 5mm 0 2mm; }
 .summary { font-size: 12pt; }
 .body-columns { column-count: 2; column-gap: 10mm; }
 .story { break-inside: avoid; margin: 0 0 6mm; }
+.section-heading { column-span: all; border-bottom: 1px solid #777; font-size: 16pt; margin: 5mm 0 3mm; break-after: avoid; }
 .story h3 { font-size: 14pt; line-height: 1.1; margin: 0 0 2mm; }
+.briefs { break-inside: avoid; border-top: 1px solid #777; margin-top: 6mm; padding-top: 3mm; }
+.briefs h2 { font-size: 16pt; margin: 0 0 2mm; }
 a { color: inherit; text-decoration: underline; }

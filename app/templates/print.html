@@ -7,10 +7,14 @@
 <main>
   <section class="lead"><h2>{{ items[0].headline }}</h2>{% if items[0].image_src %}<img src="{{ items[0].image_src }}" alt="">{% endif %}<p class="summary">{{ items[0].summary }}</p><p class="meta"><a href="{{ items[0].source_url }}">{{ items[0].source_name }}</a> · {{ items[0].published_at|relative_time }}</p></section>
   <section class="body-columns">
-  {% for item in items[1:] %}
-  <article class="story"><h3>{{ item.headline }}</h3><p>{{ item.summary }}</p><p class="meta"><a href="{{ item.source_url }}">{{ item.source_name }}</a> · {{ item.published_at|relative_time }}</p></article>
+  {% for section in edition.sections %}
+    <h2 class="section-heading">{{ section.name|replace("_", " ")|title }}</h2>
+    {% for item in items[1:] if item.article_id in section.article_ids %}
+    <article class="story"><h3>{{ item.headline }}</h3><p>{{ item.summary }}</p><p class="meta"><a href="{{ item.source_url }}">{{ item.source_name }}</a> · {{ item.published_at|relative_time }}</p></article>
+    {% endfor %}
   {% endfor %}
   </section>
+  {% if briefs %}<aside class="briefs"><h2>Short briefs</h2>{% for item in briefs %}<p><strong>{{ item.headline }}</strong> — {{ item.summary }} <a href="{{ item.source_url }}">Read source</a></p>{% endfor %}</aside>{% endif %}
 </main>
 {% else %}<p>No stories are available for this edition.</p>{% endif %}
 </body></html>
