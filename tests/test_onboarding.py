@@ -26,8 +26,10 @@ def test_onboarding_creates_settings_vectors_cookie_and_status(tmp_path: Path, m
         "/api/onboarding",
         json={
             "selected_topics": ["technology_ai"],
+            "muted_topics": ["sports"],
             "selected_sub_interests": ["robotics"],
             "interest_tags": ["women's football"],
+            "source_weights": {"npr-news": 1.0},
             "depth": "long",
             "stories_per_edition": 18,
             "surprise_level": "high",
@@ -43,6 +45,8 @@ def test_onboarding_creates_settings_vectors_cookie_and_status(tmp_path: Path, m
     profile = ProfileRepository(Database(tmp_path / "onboarding.db")).get_profile(user_id)
     assert profile is not None
     assert profile["topic_weights"] == {"technology_ai": 3.0, "robotics": 2.0, "women's football": 2.0}
+    assert profile["muted_topics"] == ["sports"]
+    assert profile["source_weights"] == {"npr-news": 1.0}
     assert profile["vector_dimension"] == 64
     assert profile["settings"]["edition_size"] == 18
     assert profile["settings"]["exploration_floor"] == 0.25
@@ -53,6 +57,12 @@ def test_onboarding_creates_settings_vectors_cookie_and_status(tmp_path: Path, m
     assert page.status_code == 200
     assert "<Reader>" not in page.text
     assert "&lt;Reader&gt;" not in page.text
+
+
+def test_onboarding_source_options_use_enabled_sources() -> None:
+    response = TestClient(app).get("/api/onboarding/sources")
+    assert response.status_code == 200
+    assert {"source_id": "npr-news", "name": "NPR News"} in response.json()
 
 
 def test_tampered_session_cookie_is_rejected() -> None:

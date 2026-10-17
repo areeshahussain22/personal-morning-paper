@@ -2,47 +2,60 @@
 {% block title %}Set up your paper{% endblock %}
 {% block content %}
 <section class="intro">
-  <p class="kicker">Your daily briefing</p>
-  <h1>A morning paper that follows what matters to you.</h1>
-  <p class="lede">Choose a few signals. We will build your first edition without the noise.</p>
+  <p class="kicker">A more personal daily briefing</p>
+  <h1>Your interests. Your stories. Your morning paper.</h1>
+  <p class="lede">Choose a few topics and we’ll shape a newspaper around what matters to you.</p>
 </section>
 <form id="onboarding-form" class="card" novalidate>
   <div class="progress"><span id="progress-bar"></span></div>
   <p class="step-label" id="step-label">Step 1 of 4</p>
   <section class="step active" data-step="1">
-    <h2>Welcome</h2>
-    <p>Start with the subjects you want to understand better.</p>
-    <button type="button" class="primary next">Choose interests</button>
+    <h2>Start with what matters</h2>
+    <p>It takes about a minute. You can skip any optional choices.</p>
+    <button type="button" class="primary next">Personalize my paper</button>
   </section>
   <section class="step" data-step="2">
-    <h2>What should lead?</h2>
-    <p class="hint">Pick as many topics as you like. Selecting a topic reveals its signals.</p>
-    <div id="topics" class="chips"></div>
+    <h2>Choose your interests</h2>
+    <p class="hint">Pick a few topics. Add a focus or mute topics you’d rather skip.</p>
+    <h3 class="form-heading">Topics for your paper</h3>
+    <div id="topics" class="chips" aria-label="Choose topics"></div>
+    <h3 class="form-heading">More specific interests (optional)</h3>
     <div id="sub-interests" class="sub-interest-list"></div>
-    <label>Anything specific you follow?
+    <h3 class="form-heading">Topics to mute (optional)</h3>
+    <div id="muted-topics" class="chips" aria-label="Mute topics"></div>
+    <label>Specific interests (optional)
       <textarea id="interest-text" maxlength="1000" placeholder="A team, a person, a hobby..."></textarea>
     </label>
-    <button type="button" id="tag-button" class="secondary">Suggest tags</button>
+    <button type="button" id="tag-button" class="secondary">Add interests</button>
     <div id="tags" class="chips"></div>
-    <div class="actions"><button type="button" class="secondary back">Back</button><button type="button" class="primary next">Reading preferences</button></div>
+    <details class="source-picker">
+      <summary>Prefer particular news sources? (optional)</summary>
+      <p class="hint">Choose sources to give them a small ranking boost.</p>
+      <div id="sources" class="source-options"></div>
+    </details>
+    <div class="actions"><button type="button" class="secondary back">Back</button><button type="button" class="primary next">Continue</button></div>
   </section>
   <section class="step" data-step="3">
-    <h2>Make it yours</h2>
+    <h2>Set your delivery</h2>
+    <p class="hint">Defaults are ready to use. Change only what you want.</p>
     <label>Depth <select id="depth"><option value="brief">Brief</option><option value="standard" selected>Standard</option><option value="long">Long</option></select></label>
     <label>Stories per edition <input id="story-count" type="number" min="10" max="20" value="10"></label>
     <label>Surprise level <select id="surprise"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
-    <label>Timezone <input id="timezone" value="UTC" maxlength="80"></label>
+    <label>Timezone <input id="timezone" value="UTC" maxlength="80"><small>Use your region’s timezone so delivery follows your morning.</small></label>
     <label>Delivery time <input id="delivery-time" type="time" value="07:00"></label>
     <label>Display name (optional) <input id="display-name" maxlength="120"></label>
-    <p class="extension">Headline reactions will be available in a later step.</p>
-    <div class="actions"><button type="button" class="secondary back">Back</button><button type="button" class="primary next">Review</button></div>
+    <div class="actions"><button type="button" class="secondary back">Back</button><button type="button" class="primary next">Review choices</button></div>
   </section>
   <section class="step" data-step="4">
-    <h2>Ready for tomorrow morning?</h2>
-    <p id="review"></p>
-    <div class="actions"><button type="button" class="secondary back">Back</button><button type="submit" class="primary">Create my paper</button></div>
+    <h2>Your paper, your way</h2>
+    <div id="review" class="review-summary"></div>
+    <div class="actions">
+      <button type="button" class="secondary" id="edit-interests">Edit interests</button>
+      <button type="button" class="secondary" id="edit-delivery">Edit delivery</button>
+      <button type="submit" class="primary">Create my paper</button>
+    </div>
   </section>
   <p id="form-error" class="error" role="alert"></p>
 </form>
 {% endblock %}
-{% block scripts %}<script src="/static/onboarding.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/onboarding.js?v=4"></script>{% endblock %}

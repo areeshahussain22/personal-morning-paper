@@ -140,6 +140,11 @@ def edition_service(use_llm: bool) -> tuple[EditionService, object | None]:
         if settings.embedding_backend == "sentence_transformer"
         else settings.topic_match_threshold,
         dimensions=settings.embedding_dimensions,
+        embedder=create_embedder(
+            settings.embedding_backend,
+            settings.embedding_dimensions,
+            settings.embedding_allow_fallback,
+        ),
     )
     client = build_client() if use_llm else None
     return EditionService(database, profile_service, client), client

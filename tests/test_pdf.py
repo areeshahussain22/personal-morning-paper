@@ -46,6 +46,7 @@ def test_pdf_renderer_writes_pdf_and_uses_pdf_tokens(tmp_path: Path, monkeypatch
     assert details["article_id"] == token_row["article_id"]
     assert details["position"] == token_row["position"]
     assert details["original_url"].startswith("https://")
+    assert ProfileRepository(database).link_target(token_row["token"]) == details["original_url"]
 
 
 def test_pdf_cache_and_force_invalidation(tmp_path: Path, monkeypatch) -> None:

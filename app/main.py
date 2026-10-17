@@ -6,6 +6,7 @@ from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from itsdangerous import BadSignature, URLSafeTimedSerializer
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.ingestion import router as ingestion_router
@@ -50,6 +51,8 @@ app.include_router(demo_router)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 app.state.templates = templates
 
+PDF_LINK_MAX_AGE_SECONDS = 24 * 60 * 60
+
 
 def _relative_time(value: str | None) -> str:
     if not value:
@@ -74,6 +77,14 @@ def _repo() -> ProfileRepository:
     return ProfileRepository(Database(settings.database_path))
 
 
+def _pdf_link_token(user_id: str, edition_date: str) -> str:
+    serializer = URLSafeTimedSerializer(
+        settings.session_secret or "development-only-session-secret",
+        salt="edition-pdf",
+    )
+    return serializer.dumps({"user_id": user_id, "edition_date": edition_date})
+
+
 def _edition_context(request: Request, edition_date: str) -> dict:
     user_id = request.session.get("user_id")
     repo = _repo()
@@ -83,8 +94,11 @@ def _edition_context(request: Request, edition_date: str) -> dict:
     if stored is None:
         stored = {"edition_date": edition_date, "items": [], "sections": [], "render_items": []}
     editions = repo.list_editions(user_id) if user_id else []
-    number = next((index for index, item in enumerate(reversed(editions), 1)
-                   if item["edition_date"] == edition_date), len(editions) + 1)
+    number = next(
+        (index for index, item in enumerate(reversed(editions), 1)
+         if item["edition_date"] == edition_date),
+        None,
+    )
     return {
         "edition": stored,
         "reader_name": (profile or {}).get("settings", {}).get("display_name")
@@ -92,14 +106,29 @@ def _edition_context(request: Request, edition_date: str) -> dict:
         "edition_number": number,
         "user_id": user_id,
         "generation": generation,
+        "demo_mode": settings.demo_mode,
+        "pdf_link_token": (
+            _pdf_link_token(user_id, edition_date)
+            if user_id and stored.get("items")
+            else None
+        ),
     }
 
 
 @app.get("/")
 def read_root(request: Request) -> Response:
-    if request.session.get("user_id"):
-        return RedirectResponse("/edition/today")
+    user_id = request.session.get("user_id")
+    if user_id:
+        if _repo().get_profile(user_id):
+            return RedirectResponse("/edition/today")
+        request.session.clear()
     return templates.TemplateResponse(request=request, name="onboarding.html", context={"topics": []})
+
+
+@app.get("/logout")
+def logout(request: Request) -> Response:
+    request.session.clear()
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/preparing")
@@ -117,10 +146,25 @@ def today_edition(request: Request) -> Response:
 
 
 @app.get("/edition/{edition_date}/pdf")
-def edition_pdf(request: Request, edition_date: str, background_tasks: BackgroundTasks) -> Response:
+def edition_pdf(
+    request: Request, edition_date: str, background_tasks: BackgroundTasks, token: str | None = None
+) -> Response:
     user_id = request.session.get("user_id")
     if not user_id:
-        return RedirectResponse("/")
+        if token:
+            serializer = URLSafeTimedSerializer(
+                settings.session_secret or "development-only-session-secret",
+                salt="edition-pdf",
+            )
+            try:
+                claims = serializer.loads(token, max_age=PDF_LINK_MAX_AGE_SECONDS)
+            except BadSignature:
+                return Response(status_code=401)
+            if claims.get("edition_date") != edition_date or not claims.get("user_id"):
+                return Response(status_code=401)
+            user_id = claims["user_id"]
+        else:
+            return Response(status_code=401)
     try:
         path = build_pdf(_repo(), user_id, edition_date, settings)
     except LookupError:

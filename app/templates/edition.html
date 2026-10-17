@@ -2,14 +2,65 @@
 {% from "macros.html" import story_card %}
 {% block title %}{{ edition.edition_date }} · Personal Morning Paper{% endblock %}
 {% block content %}
-<header class="edition-heading"><p class="kicker">Edition {{ edition_number }} · {{ edition.edition_date }}</p><h1>{{ reader_name }}'s morning paper</h1><p class="lede">Stories selected for your interests, with context from trusted sources.</p></header>
-{% if edition["items"] %}<p><a class="secondary" href="/edition/{{ edition.edition_date }}/pdf">Download PDF</a></p>{% endif %}
+<header class="edition-heading">
+  <p class="kicker">{% if edition_number %}Issue {{ edition_number }} · {% endif %}<time datetime="{{ edition.edition_date }}">{{ edition.edition_date }}</time></p>
+  <h1>{{ reader_name }}’s morning paper</h1>
+  {% if edition.render_items %}
+    {% set issue_topics = edition.render_items|map(attribute='topic')|reject('equalto', none)|unique|list %}
+    <p class="lede">A thoughtful start to the day, with reporting across {{ issue_topics|length }} topics you follow.</p>
+  {% else %}
+    <p class="lede">A thoughtful start to the day, shaped around the subjects you follow.</p>
+  {% endif %}
+</header>
+{% if not demo_mode %}
+<section class="previous-paper-previews" aria-labelledby="previous-paper-heading">
+  <div class="previous-paper-title">
+    <div>
+      <p class="kicker">Quick look back</p>
+      <h2 id="previous-paper-heading">Previous papers</h2>
+    </div>
+    <a href="/archive">Open saved archive →</a>
+  </div>
+  <p class="hint">Static sample previews only; saved past editions appear in your archive.</p>
+  <div class="previous-paper-tabs" role="tablist" aria-label="Sample previous papers">
+    <button type="button" role="tab" id="previous-tab-1" aria-controls="previous-panel-1" aria-selected="true" data-previous-tab="1">Yesterday</button>
+    <button type="button" role="tab" id="previous-tab-2" aria-controls="previous-panel-2" aria-selected="false" tabindex="-1" data-previous-tab="2">Earlier this week</button>
+    <button type="button" role="tab" id="previous-tab-3" aria-controls="previous-panel-3" aria-selected="false" tabindex="-1" data-previous-tab="3">Weekend edition</button>
+  </div>
+  <article class="previous-paper-panel" role="tabpanel" id="previous-panel-1" aria-labelledby="previous-tab-1" data-previous-panel="1">
+    <p class="kicker">Sample · Yesterday’s edition</p>
+    <h3>The ideas and decisions shaping tomorrow</h3>
+    <p>A concise front page spanning technology, world affairs, and the day’s biggest developments.</p>
+  </article>
+  <article class="previous-paper-panel" role="tabpanel" id="previous-panel-2" aria-labelledby="previous-tab-2" data-previous-panel="2" hidden>
+    <p class="kicker">Sample · Earlier this week</p>
+    <h3>What changed across the stories you follow</h3>
+    <p>A quick catch-up on important updates, new research, and shifts worth watching.</p>
+  </article>
+  <article class="previous-paper-panel" role="tabpanel" id="previous-panel-3" aria-labelledby="previous-tab-3" data-previous-panel="3" hidden>
+    <p class="kicker">Sample · Weekend edition</p>
+    <h3>A slower read on the week’s defining stories</h3>
+    <p>Context and perspective on the people, ideas, and events making the news.</p>
+  </article>
+</section>
+{% endif %}
+{% if edition.render_items %}
+<div class="edition-tools">
+  <button type="button" class="secondary" data-refresh-paper data-user-id="{{ user_id }}" data-edition-date="{{ edition.edition_date }}">Refresh my paper</button>
+  <span id="refresh-status" role="status" aria-live="polite"></span>
+</div>
+{% endif %}
+{% if edition["items"] %}<p><a class="secondary pdf-download" href="/edition/{{ edition.edition_date }}/pdf?token={{ pdf_link_token }}" target="_blank" rel="noopener">Download this issue as PDF ↗</a></p>{% endif %}
 {% if edition.render_items %}
   {% set lead = edition.render_items[0] %}
-  <section class="lead-story" aria-labelledby="lead-headline">{{ story_card(lead) }}</section>
-  {% if edition.render_items|length > 1 %}<section class="secondary-grid" aria-label="More stories">{% for item in edition.render_items[1:3] %}{{ story_card(item, true) }}{% endfor %}</section>{% endif %}
+  {% set featured_ids = edition.render_items[:3]|map(attribute='article_id')|list %}
+  <section class="lead-story" aria-label="Lead story">{{ story_card(lead, "lead") }}</section>
+  {% if edition.render_items|length > 1 %}<section class="secondary-grid" aria-label="More top stories">{% for item in edition.render_items[1:3] %}{{ story_card(item, "secondary") }}{% endfor %}</section>{% endif %}
   {% for section in edition.sections %}
-  <section class="paper-section"><h2>{{ section.name|replace("_", " ")|title }}</h2><div class="section-grid">{% for item in edition.render_items if item.article_id in section.article_ids %}{{ story_card(item, true) }}{% endfor %}</div></section>
+    {% set section_items = edition.render_items|selectattr('article_id', 'in', section.article_ids)|rejectattr('article_id', 'in', featured_ids)|list %}
+    {% if section_items %}
+    <section class="paper-section"><h2>{{ section.name|replace("_", " ")|title }}</h2><div class="section-grid">{% for item in section_items %}{{ story_card(item, "compact") }}{% endfor %}</div></section>
+    {% endif %}
   {% endfor %}
 {% else %}
 <section class="empty-state card" aria-live="polite">
@@ -39,4 +90,4 @@
 </section>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="/static/events.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/edition.js?v=2"></script><script src="/static/events.js"></script>{% endblock %}

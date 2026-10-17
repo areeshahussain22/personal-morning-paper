@@ -9,8 +9,15 @@
 <body>
   <main class="shell">
     <header class="masthead">
-      <a class="wordmark" href="/">Personal Morning Paper</a>
-      <nav aria-label="Primary"><a href="/archive">Archive</a> <a href="/profile">Profile</a></nav>
+      <a class="wordmark" href="/edition/today">Personal Morning Paper</a>
+      {% if request.session.get("user_id") %}
+      <nav aria-label="Primary">
+        <a href="/edition/today">Today’s Paper</a>
+        <a href="/archive">Archive</a>
+        <a href="/profile">Profile</a>
+        <a href="/logout">Sign out</a>
+      </nav>
+      {% endif %}
     </header>
     {% block content %}{% endblock %}
   </main>

@@ -323,17 +323,17 @@ class ProfileRepository:
     def link_target(self, token: str) -> str | None:
         with self.database.connect() as db:
             row = db.execute(
-                "SELECT a.original_url FROM link_tokens t JOIN articles a ON a.article_id=t.article_id WHERE t.token=?",
+                "SELECT a.canonical_url FROM link_tokens t JOIN articles a ON a.article_id=t.article_id WHERE t.token=?",
                 (token,),
             ).fetchone()
-        return row["original_url"] if row else None
+        return row["canonical_url"] if row else None
 
     def token_details(self, token: str) -> dict | None:
         with self.database.connect() as db:
             row = db.execute(
                 """SELECT t.token, t.user_id, t.article_id, t.edition_id, t.position,
                           t.source_id, t.token_source,
-                          a.original_url
+                          a.canonical_url AS original_url
                    FROM link_tokens t JOIN articles a ON a.article_id=t.article_id
                    WHERE t.token=?""", (token,)
             ).fetchone()

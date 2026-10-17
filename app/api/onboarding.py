@@ -16,6 +16,7 @@ from app.services.onboarding import make_tags
 from app.services.learning import LearningProcessor
 from app.services.recommendation import RecommendationService, build_profile_vector
 from app.services.topics import TOPICS
+from app.services.source_registry import enabled_sources
 
 router = APIRouter(prefix="/api", tags=["onboarding"])
 TOPIC_NAMES = {topic.name for topic in TOPICS}
@@ -27,8 +28,10 @@ class TagRequest(BaseModel):
 
 class OnboardingRequest(BaseModel):
     selected_topics: list[str] = Field(default_factory=list, max_length=6)
+    muted_topics: list[str] = Field(default_factory=list, max_length=6)
     selected_sub_interests: list[str] = Field(default_factory=list, max_length=20)
     interest_tags: list[str] = Field(default_factory=list, max_length=10)
+    source_weights: dict[str, float] = Field(default_factory=dict, max_length=12)
     depth: str = "standard"
     stories_per_edition: int = Field(default=10, ge=10, le=20)
     surprise_level: str = "medium"
@@ -43,6 +46,23 @@ class OnboardingRequest(BaseModel):
         if any(value not in TOPIC_NAMES for value in values):
             raise ValueError("selected_topics contains an unknown topic")
         return list(dict.fromkeys(values))
+
+    @field_validator("muted_topics")
+    @classmethod
+    def valid_muted_topics(cls, values: list[str]) -> list[str]:
+        if any(value not in TOPIC_NAMES for value in values):
+            raise ValueError("muted_topics contains an unknown topic")
+        return list(dict.fromkeys(values))
+
+    @field_validator("source_weights")
+    @classmethod
+    def valid_source_weights(cls, values: dict[str, float]) -> dict[str, float]:
+        source_ids = {source.source_id for source in enabled_sources()}
+        if any(source_id not in source_ids for source_id in values):
+            raise ValueError("source_weights contains an unknown source")
+        if any(not 0 <= weight <= 5 for weight in values.values()):
+            raise ValueError("source weights must be between 0 and 5")
+        return values
 
     @field_validator("depth")
     @classmethod
@@ -76,8 +96,8 @@ def _create_profile(payload: OnboardingRequest) -> str:
     return repo.create_user(
         payload.display_name or "Reader",
         weights,
-        {},
-        [],
+        payload.source_weights,
+        payload.muted_topics,
         vector,
         embedder.name,
         payload.selected_sub_interests,
@@ -107,6 +127,11 @@ def _generate_background(user_id: str, edition_date: str) -> None:
             if settings.embedding_backend == "sentence_transformer"
             else settings.topic_match_threshold,
             dimensions=settings.embedding_dimensions,
+            embedder=create_embedder(
+                settings.embedding_backend,
+                settings.embedding_dimensions,
+                settings.embedding_allow_fallback,
+            ),
         )
         client = build_client()
         try:
@@ -127,6 +152,11 @@ async def onboarding_tags(payload: TagRequest) -> dict[str, list[str]]:
     client = build_client()
     async with client:
         return {"tags": await make_tags(payload.text, client)}
+
+
+@router.get("/onboarding/sources")
+def onboarding_sources() -> list[dict[str, str]]:
+        return [{"source_id": source.source_id, "name": source.name} for source in enabled_sources()]
 
 
 @router.post("/onboarding")

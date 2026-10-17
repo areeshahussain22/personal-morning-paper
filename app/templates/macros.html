@@ -1,17 +1,23 @@
-{% macro story_card(item, compact=false) -%}
-<article class="story-card{% if compact %} story-card--compact{% endif %}" data-article-id="{{ item.article_id }}" data-edition-id="{{ item.edition_id }}" data-position="{{ item.position }}" data-topic="{{ item.topic|default('') }}">
+{% macro story_card(item, variant="standard") -%}
+<article class="story-card story-card--{{ variant }}" data-article-id="{{ item.article_id }}" data-edition-id="{{ item.edition_id }}" data-position="{{ item.position }}" data-topic="{{ item.topic|default('') }}">
   {% if item.image_url %}
   <a class="story-image" href="/out/{{ item.out_token }}" target="_blank" rel="noopener noreferrer">
     <img src="{{ item.image_url }}" alt="" loading="lazy" onerror="this.parentElement.classList.add('image-fallback'); this.remove()">
   </a>
   {% else %}<div class="story-image image-fallback" aria-hidden="true"><span>Personal Morning Paper</span></div>{% endif %}
   <div class="story-content">
-    <p class="story-meta">{{ item.source_name }} · {{ item.published_at|relative_time }}
+    <p class="story-meta">{{ item.source_name }} · <time datetime="{{ item.published_at }}">{{ item.published_at|relative_time }}</time>
       <span class="reliability reliability-{{ item.reliability_label }}">{{ item.reliability_label }}</span>
       {% if item.is_paywalled %}<span class="badge">Paywalled</span>{% endif %}
     </p>
+    {% if item.topic %}<p class="topic-tag">{{ item.topic|replace("_", " ") }}</p>{% endif %}
+    {% if variant == "lead" %}
+    <h2><a href="/out/{{ item.out_token }}" target="_blank" rel="noopener noreferrer">{{ item.headline }}</a></h2>
+    {% else %}
     <h3><a href="/out/{{ item.out_token }}" target="_blank" rel="noopener noreferrer">{{ item.headline }}</a></h3>
+    {% endif %}
     <p>{{ item.summary }}</p>
+    <a class="read-original" href="/out/{{ item.out_token }}" target="_blank" rel="noopener noreferrer">Read original ↗</a>
     {% if item.other_outlets %}<p class="coverage">Also covered by {{ item.other_outlets|length }} outlet{% if item.other_outlets|length != 1 %}s{% endif %}: {{ item.other_outlets|join(", ") }}</p>{% endif %}
     <p class="reason">{{ item.reason_text }}</p>
     <div class="story-actions" aria-label="Story actions">
