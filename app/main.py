@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.api.ingestion import router as ingestion_router
 from app.api.onboarding import router as onboarding_router
 from app.api.recommendations import router as recommendations_router
+from app.api.events import router as events_router
 from app.core.config import get_settings
 from app.core.logging import configure_http_logging
 from app.repositories.database import Database
@@ -38,6 +39,7 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 app.include_router(ingestion_router)
 app.include_router(recommendations_router)
 app.include_router(onboarding_router)
+app.include_router(events_router)
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
@@ -99,7 +101,7 @@ def today_edition(request: Request) -> Response:
 
 
 @app.get("/edition/{edition_date}/pdf")
-def edition_pdf(request: Request, edition_date: str) -> Response:
+def edition_pdf(request: Request, edition_date: str, background_tasks: BackgroundTasks) -> Response:
     user_id = request.session.get("user_id")
     if not user_id:
         return RedirectResponse("/")
@@ -107,6 +109,12 @@ def edition_pdf(request: Request, edition_date: str) -> Response:
         path = build_pdf(_repo(), user_id, edition_date, settings)
     except LookupError:
         return Response(status_code=404)
+    metadata = _repo().edition_pdf_metadata(user_id, edition_date)
+    if metadata:
+        background_tasks.add_task(
+            _repo().record_event, user_id, "pdf_download", "pdf",
+            None, metadata["edition_id"], None, None, {},
+        )
     return Response(
         content=path.read_bytes(),
         media_type="application/pdf",
@@ -145,11 +153,26 @@ def archive_page(request: Request) -> Response:
 
 
 @app.get("/out/{token}")
-def outbound_link(token: str) -> Response:
-    target = _repo().link_target(token)
+def outbound_link(request: Request, token: str, background_tasks: BackgroundTasks) -> Response:
+    repo = _repo()
+    details = repo.token_details(token)
+    target = details["original_url"] if details else None
     parsed = urlparse(target or "")
     if not target or parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return Response(status_code=404)
+    user_agent = request.headers.get("user-agent", "").lower()
+    prefetch = any(name in request.headers for name in ("purpose", "sec-purpose", "x-moz"))
+    bot = any(name in user_agent for name in ("bot", "crawler", "spider", "prefetch", "preview"))
+    if request.method != "HEAD" and not prefetch and not bot:
+        def record_click() -> None:
+            if not repo.click_recorded_recently(
+                details["user_id"], token, settings.event_click_dedupe_seconds
+            ):
+                repo.record_event(
+                    details["user_id"], "click", details["token_source"], details["article_id"],
+                    details["edition_id"], None, details["position"], {"token": token},
+                )
+        background_tasks.add_task(record_click)
     return RedirectResponse(target, status_code=302)
 
 

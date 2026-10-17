@@ -15,4 +15,4 @@
 <section class="empty-state card"><p class="kicker">No edition yet</p><h2>Your paper is waiting to be generated.</h2><p>Prepare today's stories when you're ready.</p><button class="primary" data-user-id="{{ user_id }}" data-generate-date="{{ edition.edition_date }}">Generate now</button><p id="generation-message" class="hint" role="status"></p></section>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="/static/edition.js"></script>{% endblock %}
+{% block scripts %}<script src="/static/edition.js"></script><script src="/static/events.js"></script>{% endblock %}

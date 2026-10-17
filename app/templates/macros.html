@@ -1,5 +1,5 @@
 {% macro story_card(item, compact=false) -%}
-<article class="story-card{% if compact %} story-card--compact{% endif %}">
+<article class="story-card{% if compact %} story-card--compact{% endif %}" data-article-id="{{ item.article_id }}" data-edition-id="{{ item.edition_id }}" data-position="{{ item.position }}" data-topic="{{ item.topic|default('') }}">
   {% if item.image_url %}
   <a class="story-image" href="/out/{{ item.out_token }}" target="_blank" rel="noopener noreferrer">
     <img src="{{ item.image_url }}" alt="" loading="lazy" onerror="this.parentElement.classList.add('image-fallback'); this.remove()">
@@ -14,6 +14,12 @@
     <p>{{ item.summary }}</p>
     {% if item.other_outlets %}<p class="coverage">Also covered by {{ item.other_outlets|length }} outlet{% if item.other_outlets|length != 1 %}s{% endif %}: {{ item.other_outlets|join(", ") }}</p>{% endif %}
     <p class="reason">{{ item.reason_text }}</p>
+    <div class="story-actions" aria-label="Story actions">
+      <button type="button" data-event="save">Save</button>
+      <button type="button" data-event="like">Like</button>
+      <button type="button" data-event="dislike">Not interested</button>
+      <button type="button" data-event="less_topic">Less of this topic</button>
+    </div>
     <details class="why-panel"><summary>Why this?</summary>
       {% for key, value in item.score_components.items() %}
       <div class="score-row"><span>{{ key }}</span><span class="score-bar"><i style="width: {{ (value|float * 100)|round|int }}%"></i></span></div>

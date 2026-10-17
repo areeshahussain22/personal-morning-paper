@@ -40,6 +40,8 @@ class Settings:
     public_base_url: str = "http://localhost:8000"
     pdf_image_timeout_seconds: float = 8.0
     pdf_image_max_bytes: int = 2 * 1024 * 1024
+    event_click_dedupe_seconds: int = 30
+    event_rate_limit_per_minute: int = 60
 
 
 def _load_local_env() -> None:
@@ -99,4 +101,6 @@ def get_settings() -> Settings:
         public_base_url=os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"),
         pdf_image_timeout_seconds=float(os.getenv("PDF_IMAGE_TIMEOUT_SECONDS", "8")),
         pdf_image_max_bytes=int(os.getenv("PDF_IMAGE_MAX_BYTES", str(2 * 1024 * 1024))),
+        event_click_dedupe_seconds=int(os.getenv("EVENT_CLICK_DEDUPE_SECONDS", "30")),
+        event_rate_limit_per_minute=int(os.getenv("EVENT_RATE_LIMIT_PER_MINUTE", "60")),
     )

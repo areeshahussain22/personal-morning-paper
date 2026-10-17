@@ -486,3 +486,19 @@ On macOS:
 ```bash
 brew install pango libffi
 ```
+
+### Reader events and privacy
+
+The reader UI records raw interaction facts through `POST /api/events`:
+`impression_seen` means a story was visible for about one second,
+`expand_summary` means its explanation was opened, `save`, `like`, `dislike`,
+and `less_topic` are explicit reader actions, `return` records seconds away
+after following an article, and `pdf_download` records a PDF download.
+Outbound article clicks are recorded asynchronously by `/out/{token}`.
+
+Events store the session user, optional article and edition, position, source,
+raw value, small JSON extras, and timestamp. They are not converted into
+profile signals in this phase. Events can be deleted directly from the
+`events` table by user and are retained in the local SQLite database until
+that deletion or database cleanup. Bot, prefetch, and repeated clicks inside
+the configured deduplication window are ignored.

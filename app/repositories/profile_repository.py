@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -220,7 +220,7 @@ class ProfileRepository:
         with self.database.connect() as db:
             rows = db.execute(
                 f"""SELECT a.article_id, a.source_id, a.source_name, a.original_url,
-                           a.image_url, a.published_at, s.reliability_score, s.is_paywalled
+                           a.image_url, a.published_at, a.topic, s.reliability_score, s.is_paywalled
                     FROM articles a JOIN sources s ON s.source_id=a.source_id
                     WHERE a.article_id IN ({marks})""", ids
             ).fetchall()
@@ -239,6 +239,7 @@ class ProfileRepository:
         for item in result["items"]:
             detail = details.get(item["article_id"], {})
             enriched = {**item, **detail}
+            enriched["edition_id"] = result["edition_id"]
             enriched["other_outlets"] = sorted(set(outlets.get(item["article_id"], [])))
             score = detail.get("reliability_score", 0)
             enriched["reliability_label"] = "high" if score >= 0.85 else "medium" if score >= 0.65 else "lower"
@@ -279,6 +280,76 @@ class ProfileRepository:
                 (token,),
             ).fetchone()
         return row["original_url"] if row else None
+
+    def token_details(self, token: str) -> dict | None:
+        with self.database.connect() as db:
+            row = db.execute(
+                """SELECT token, user_id, article_id, edition_id, position, source_id, token_source,
+                          a.original_url
+                   FROM link_tokens t JOIN articles a ON a.article_id=t.article_id
+                   WHERE t.token=?""", (token,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def record_event(
+        self, user_id: str, event_type: str, source: str, article_id: str | None = None,
+        edition_id: str | None = None, value: float | None = None,
+        position: int | None = None, extra: dict | None = None,
+    ) -> bool:
+        with self.database.connect() as db:
+            if event_type == "impression_seen":
+                existing = db.execute(
+                    """SELECT 1 FROM events WHERE user_id=? AND edition_id=? AND article_id=?
+                       AND type=? LIMIT 1""",
+                    (user_id, edition_id, article_id, event_type),
+                ).fetchone()
+                if existing:
+                    return False
+            db.execute(
+                """INSERT INTO events
+                   (user_id, article_id, edition_id, type, value, position, source, extra_json, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, article_id, edition_id, event_type, value, position, source,
+                 json.dumps(extra or {}), to_db_time(utc_now())),
+            )
+        return True
+
+    def event_allowed_for_edition(
+        self, user_id: str, article_id: str | None, edition_id: str | None
+    ) -> bool:
+        if article_id is None and edition_id is None:
+            return True
+        with self.database.connect() as db:
+            if edition_id is None:
+                return db.execute(
+                    "SELECT 1 FROM editions e JOIN edition_items i ON i.edition_id=e.edition_id "
+                    "WHERE e.user_id=? AND i.article_id=? LIMIT 1", (user_id, article_id)
+                ).fetchone() is not None
+            if article_id is None:
+                return db.execute(
+                    "SELECT 1 FROM editions WHERE user_id=? AND edition_id=?", (user_id, edition_id)
+                ).fetchone() is not None
+            return db.execute(
+                "SELECT 1 FROM editions e JOIN edition_items i ON i.edition_id=e.edition_id "
+                "WHERE e.user_id=? AND e.edition_id=? AND i.article_id=?",
+                (user_id, edition_id, article_id),
+            ).fetchone() is not None
+
+    def event_count_since(self, user_id: str, seconds: int) -> int:
+        with self.database.connect() as db:
+            row = db.execute(
+                "SELECT COUNT(*) AS count FROM events WHERE user_id=? AND created_at >= ?",
+                (user_id, to_db_time(utc_now() - timedelta(seconds=seconds))),
+            ).fetchone()
+        return int(row["count"])
+
+    def click_recorded_recently(self, user_id: str, token: str, seconds: int) -> bool:
+        with self.database.connect() as db:
+            return db.execute(
+                """SELECT 1 FROM events WHERE user_id=? AND type='click'
+                   AND extra_json LIKE ? AND created_at >= ? LIMIT 1""",
+                (user_id, f'%"token": "{token}"%', to_db_time(utc_now() - timedelta(seconds=seconds))),
+            ).fetchone() is not None
 
     def set_pdf_status(self, edition_id: str, status: str, path: str | None = None) -> None:
         with self.database.connect() as db:

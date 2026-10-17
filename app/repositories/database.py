@@ -170,6 +170,21 @@ class Database:
                     event_type TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    article_id TEXT REFERENCES articles(article_id),
+                    edition_id TEXT REFERENCES editions(edition_id) ON DELETE CASCADE,
+                    type TEXT NOT NULL,
+                    value REAL,
+                    position INTEGER,
+                    source TEXT NOT NULL,
+                    extra_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    processed_at TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_events_user_time ON events(user_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_events_impression ON events(user_id, edition_id, article_id, type);
                 CREATE INDEX IF NOT EXISTS idx_edition_user_created ON editions(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_article_topics_topic ON article_topics(topic);
                 CREATE TABLE IF NOT EXISTS llm_calls (
