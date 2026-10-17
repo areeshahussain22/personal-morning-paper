@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 from app.core.config import get_settings
 from app.repositories.database import Database
 from app.repositories.profile_repository import ProfileRepository
-from app.services.recommendation import RecommendationService
+from app.services.embeddings import create_embedder
+from app.services.recommendation import RecommendationService, build_profile_vector
 from app.services.topics import TOPICS
 
 router = APIRouter(prefix="/api", tags=["recommendations"])
@@ -47,8 +48,14 @@ def topics() -> list[dict[str, str]]:
 @router.post("/users")
 def create_user(payload: UserCreate) -> dict[str, str]:
     repo = repository()
+    settings = get_settings()
+    embedder = create_embedder(
+        settings.embedding_backend, settings.embedding_dimensions, settings.embedding_allow_fallback
+    )
+    weights = topic_preferences(payload)
+    vector = build_profile_vector(embedder, weights, payload.selected_sub_interests, payload.interest_tags)
     user_id = repo.create_user(
-        payload.name, topic_preferences(payload), payload.source_weights, payload.muted_topics
+        payload.name, weights, payload.source_weights, payload.muted_topics, vector, embedder.name
     )
     return {"user_id": user_id}
 
@@ -74,6 +81,12 @@ def update_preferences(user_id: str, payload: PreferencesUpdate) -> dict:
         payload.muted_topics if payload.muted_topics is not None else current["muted_topics"],
     ):
         raise HTTPException(status_code=404, detail="User not found")
+    settings = get_settings()
+    embedder = create_embedder(
+        settings.embedding_backend, settings.embedding_dimensions, settings.embedding_allow_fallback
+    )
+    vector = build_profile_vector(embedder, payload.topic_weights or current["topic_weights"])
+    repo.set_vectors(user_id, vector, embedder.name)
     return repo.get_profile(user_id)
 
 
@@ -87,7 +100,11 @@ def recommendation_preview(user_id: str, edition_size: int = 10) -> dict:
     service = RecommendationService(
         Database(settings.database_path),
         freshness_hours=settings.freshness_hours,
-        topic_threshold=settings.topic_match_threshold,
+        topic_threshold=(
+            settings.real_topic_match_threshold
+            if settings.embedding_backend == "sentence_transformer"
+            else settings.topic_match_threshold
+        ),
         dimensions=settings.embedding_dimensions,
     )
     result = service.preview(user_id, profile, max(1, min(edition_size, 100)))

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -15,6 +16,13 @@ from app.services.recommendation import (
     score_article,
     title_similarity,
 )
+from app.services.embeddings import (
+    EmbeddingBackendError,
+    HashedEmbedder,
+    cosine_similarity as embedding_cosine,
+    create_embedder,
+)
+from app.services.recommendation import build_profile_vector
 from app.services.source_registry import RSSSource
 from app.services.topics import assign_topics, cosine_similarity, embed_text
 
@@ -45,6 +53,7 @@ def seed_database(path: Path) -> tuple[Database, str]:
     for article in articles:
         database.upsert_article(article)
     user_id = ProfileRepository(database).create_user("Demo", {"technology_ai": 3}, {}, [])
+    RecommendationService(database, embedder=HashedEmbedder()).embed_all_articles()
     return database, user_id
 
 
@@ -55,6 +64,38 @@ def test_topics_embeddings_and_cosine_are_deterministic() -> None:
     assert cosine_similarity(vector, vector) > 0.99
     assert cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
     assert cosine_similarity(None, vector) == 0.0
+
+
+def test_embedder_interface_backend_selection_and_mixed_vectors() -> None:
+    embedder = create_embedder("hashed", 16)
+    assert embedder.name == "hashed"
+    assert embedder.dimension == 16
+    assert len(embedder.embed_texts(["hello"])[0]) == 16
+    try:
+        embedding_cosine([1.0], [1.0], "hashed", "sentence_transformer")
+    except ValueError as exc:
+        assert "Cannot compare" in str(exc)
+    else:
+        raise AssertionError("mixed embedder comparison was not rejected")
+
+
+def test_sentence_backend_does_not_silently_fallback(monkeypatch) -> None:
+    monkeypatch.delenv("EMBEDDING_ALLOW_FALLBACK", raising=False)
+    embedder = create_embedder("sentence_transformer")
+    monkeypatch.setattr(embedder, "_load", lambda: (_ for _ in ()).throw(EmbeddingBackendError("missing")))
+    try:
+        embedder.embed_texts(["test"])
+    except EmbeddingBackendError:
+        pass
+    else:
+        raise AssertionError("sentence backend silently fell back")
+
+
+def test_initial_profile_vector_uses_weighted_preferences() -> None:
+    embedder = HashedEmbedder(8)
+    vector = build_profile_vector(embedder, {"technology_ai": 3}, ["science"], ["robotics"])
+    assert len(vector) == 8
+    assert sum(value * value for value in vector) > 0.99
 
 
 def test_scoring_formula_components_and_exploration() -> None:
@@ -110,8 +151,24 @@ def test_profile_and_recommendation_api_validation(tmp_path: Path, monkeypatch) 
     response = client.post("/api/users", json={"name": "Demo", "selected_topics": ["technology_ai"]})
     assert response.status_code == 200
     user_id = response.json()["user_id"]
-    assert client.get(f"/api/users/{user_id}/preferences").status_code == 200
+    preferences = client.get(f"/api/users/{user_id}/preferences")
+    assert preferences.status_code == 200
+    assert preferences.json()["vector_embedder"] == "hashed"
+    assert preferences.json()["vector_dimension"] > 0
     assert client.put(f"/api/users/{user_id}/preferences", json={"muted_topics": ["sports"]}).status_code == 200
     assert client.get("/api/users/missing/preferences").status_code == 404
     assert client.post("/api/users/missing/recommendations/preview").status_code == 404
     assert client.get(f"/api/users/{user_id}/recommendations").status_code == 404
+
+
+@pytest.mark.slow
+@pytest.mark.skip(reason="Real model integration is opt-in; run explicitly after model setup.")
+def test_real_model_semantic_similarity() -> None:
+    pytest.importorskip("sentence_transformers")
+    embedder = create_embedder("sentence_transformer")
+    related = embedder.embed_text("startup funding")
+    venture = embedder.embed_text("venture capital")
+    unrelated = embedder.embed_text("football match")
+    assert embedding_cosine(related, venture, embedder.name, embedder.name) > embedding_cosine(
+        related, unrelated, embedder.name, embedder.name
+    )

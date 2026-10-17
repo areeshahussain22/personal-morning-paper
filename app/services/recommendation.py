@@ -8,7 +8,8 @@ from typing import Iterable
 
 from app.models.recommendation import ProfilePreferences, RecommendationResult, ScoredArticle
 from app.repositories.database import Database, from_db_time, to_db_time, utc_now
-from app.services.topics import TOPICS, assign_topics, cosine_similarity, embed_text
+from app.services.embeddings import Embedder, cosine_similarity
+from app.services.topics import TOPICS, assign_topics_with_embedder
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -23,11 +24,16 @@ def score_article(
     reliability: float,
     age_hours: float,
     topics: Iterable[str],
+    article_embedder: str | None = None,
 ) -> tuple[float, dict[str, float]]:
     topic_list = list(topics)
     topic_weight = max((profile.topic_weights.get(topic, 0.0) for topic in topic_list), default=0.0)
     T = math.tanh(topic_weight / 4)
-    E = 0.6 * cosine_similarity(profile.long_vector, embedding) + 0.4 * cosine_similarity(profile.short_vector, embedding)
+    E = 0.6 * cosine_similarity(
+        profile.long_vector, embedding, profile.embedder_name, article_embedder
+    ) + 0.4 * cosine_similarity(
+        profile.short_vector, embedding, profile.embedder_name, article_embedder
+    )
     source_weight = profile.source_weights.get(article.get("source_id"), 0.0)
     S = clamp(math.tanh(source_weight / 4), -0.3, 0.3)
     C = min(1.0, math.log2(max(1, cluster_size)) / 3)
@@ -48,43 +54,59 @@ def title_similarity(left: str, right: str) -> float:
 
 
 class RecommendationService:
-    def __init__(self, database: Database, freshness_hours: int = 48, topic_threshold: float = 0.12, dimensions: int = 64):
+    def __init__(
+        self, database: Database, freshness_hours: int = 48, topic_threshold: float = 0.12,
+        dimensions: int = 64, embedder: Embedder | None = None,
+        cluster_similarity_threshold: float = 0.72, cluster_window_hours: int = 36,
+    ):
         self.database = database
         self.freshness_hours = freshness_hours
         self.topic_threshold = topic_threshold
         self.dimensions = dimensions
+        self.embedder = embedder
+        self.cluster_similarity_threshold = cluster_similarity_threshold
+        self.cluster_window_hours = cluster_window_hours
         self.database.initialize()
 
     def _prepare_article(self, row: dict) -> tuple[dict, list[str], list[float]]:
         article = dict(row)
         with self.database.connect() as db:
             cached = db.execute(
-                "SELECT vector_json FROM article_embeddings WHERE article_id = ? AND dimensions = ?",
-                (article["article_id"], self.dimensions),
+                "SELECT vector_json, embedder_name, dimensions FROM article_embeddings WHERE article_id = ?",
+                (article["article_id"],),
             ).fetchone()
             cached_topics = db.execute(
                 "SELECT topic, confidence FROM article_topics WHERE article_id = ? ORDER BY confidence DESC",
                 (article["article_id"],),
             ).fetchall()
-        if cached is not None and cached_topics:
+        if cached is not None and cached_topics and (
+            self.embedder is None or (
+                cached["embedder_name"] == self.embedder.name
+                and cached["dimensions"] == self.embedder.dimension
+            )
+        ):
+            article["_embedder_name"] = cached["embedder_name"]
             return article, [item["topic"] for item in cached_topics[:2]], json.loads(cached["vector_json"])
-        assigned = assign_topics(
-            f"{article['title']} {article.get('description') or ''}",
-            self.topic_threshold,
-        )
-        topics = [topic for topic, _ in assigned]
+        if self.embedder is None:
+            return article, [], []
         text = f"{article['title']} {article.get('description') or ''}"
-        embedding = embed_text(text, self.dimensions)
+        embedding = self.embedder.embed_text(text)
+        assigned = assign_topics_with_embedder(text, self.topic_threshold, 2, self.embedder)
+        topics = [topic for topic, _ in assigned]
         with self.database.connect() as db:
             db.execute("DELETE FROM article_topics WHERE article_id = ?", (article["article_id"],))
             db.executemany("INSERT INTO article_topics VALUES (?, ?, ?)",
                            [(article["article_id"], topic, confidence) for topic, confidence in assigned])
             db.execute(
-                """INSERT INTO article_embeddings VALUES (?, ?, ?, ?)
+                """INSERT INTO article_embeddings
+                   (article_id, dimensions, vector_json, updated_at, embedder_name)
+                   VALUES (?, ?, ?, ?, ?)
                    ON CONFLICT(article_id) DO UPDATE SET dimensions=excluded.dimensions,
-                   vector_json=excluded.vector_json, updated_at=excluded.updated_at""",
-                (article["article_id"], self.dimensions, json.dumps(embedding), to_db_time(utc_now())),
+                   vector_json=excluded.vector_json, updated_at=excluded.updated_at,
+                   embedder_name=excluded.embedder_name""",
+                (article["article_id"], len(embedding), json.dumps(embedding), to_db_time(utc_now()), self.embedder.name),
             )
+        article["_embedder_name"] = self.embedder.name
         return article, topics, embedding
 
     def _eligible_rows(self, profile: ProfilePreferences, user_id: str) -> list[dict]:
@@ -116,12 +138,20 @@ class RecommendationService:
         now = utc_now()
         for raw in self._eligible_rows(profile, user_id):
             article, topics, embedding = self._prepare_article(raw)
+            if not embedding or (
+                profile.embedder_name
+                and article.get("_embedder_name") != profile.embedder_name
+            ):
+                continue
             if set(topics) & profile.muted_topics:
                 continue
             cluster_size = self._cluster_size(article, topics)
             published = from_db_time(article["published_at"])
             age_hours = (now - published).total_seconds() / 3600 if published else 999
-            score, components = score_article(article, profile, embedding, cluster_size, raw["reliability_score"], age_hours, topics)
+            score, components = score_article(
+                article, profile, embedding, cluster_size, raw["reliability_score"],
+                age_hours, topics, article.get("_embedder_name"),
+            )
             topic = topics[0] if topics else article["topic"]
             code = "topic_interest" if profile.topic_weights.get(topic, 0) else "top_story"
             text = f"Because you read about {topic}" if code == "topic_interest" else "Top story today"
@@ -137,10 +167,70 @@ class RecommendationService:
         regular = self._mmr([item for item in remaining if item.article["article_id"] not in selected_ids], edition_size - len(must_know) - len(exploration), selected_ids)
         return RecommendationResult(must_know, exploration, regular)
 
+    def embed_all_articles(self, reembed: bool = False) -> int:
+        if self.embedder is None:
+            raise ValueError("An embedder is required for article enrichment")
+        with self.database.connect() as db:
+            rows = [dict(row) for row in db.execute("SELECT * FROM articles")]
+        pending = []
+        for row in rows:
+            with self.database.connect() as db:
+                existing = db.execute(
+                    "SELECT embedder_name, dimensions FROM article_embeddings WHERE article_id = ?",
+                    (row["article_id"],),
+                ).fetchone()
+            if not reembed and existing and existing["embedder_name"] == self.embedder.name and existing["dimensions"] == self.embedder.dimension:
+                continue
+            pending.append(row)
+        for row in pending:
+            self._prepare_article(row)
+        self.cluster_articles()
+        return len(pending)
+
+    def cluster_articles(self) -> None:
+        if self.embedder is None:
+            raise ValueError("An embedder is required for clustering")
+        threshold = self.cluster_similarity_threshold
+        with self.database.connect() as db:
+            rows = [dict(row) for row in db.execute(
+                "SELECT a.*, e.vector_json, e.embedder_name FROM articles a JOIN article_embeddings e ON e.article_id = a.article_id"
+            )]
+        for article in rows:
+            published = from_db_time(article["published_at"])
+            if not published:
+                continue
+            cluster_members = []
+            for other in rows:
+                other_published = from_db_time(other["published_at"])
+                if other["article_id"] == article["article_id"] or not other_published:
+                    continue
+                if abs((published - other_published).total_seconds()) > self.cluster_window_hours * 3600:
+                    continue
+                similarity = cosine_similarity(
+                    json.loads(article["vector_json"]), json.loads(other["vector_json"]),
+                    article["embedder_name"], other["embedder_name"],
+                )
+                if similarity >= threshold or title_similarity(article["title"], other["title"]) >= 0.45:
+                    cluster_members.append(other)
+            members = [article, *cluster_members]
+            cluster_id = min(item["article_id"] for item in members)
+            source_count = len({item["source_id"] for item in members})
+            with self.database.connect() as db:
+                for member in members:
+                    db.execute(
+                        """INSERT INTO article_clusters (article_id, cluster_id, cluster_size)
+                           VALUES (?, ?, ?) ON CONFLICT(article_id) DO UPDATE SET
+                           cluster_id=excluded.cluster_id, cluster_size=excluded.cluster_size""",
+                        (member["article_id"], cluster_id, source_count),
+                    )
+
     def _cluster_size(self, article: dict, topics: list[str]) -> int:
         with self.database.connect() as db:
-            similar = db.execute("SELECT title FROM articles WHERE article_id != ?", (article["article_id"],)).fetchall()
-        return 1 + sum(title_similarity(article["title"], row["title"]) >= 0.45 for row in similar)
+            row = db.execute(
+                "SELECT cluster_size FROM article_clusters WHERE article_id = ?",
+                (article["article_id"],),
+            ).fetchone()
+        return int(row["cluster_size"]) if row else 1
 
     def _must_know(self, candidates: list[ScoredArticle]) -> list[ScoredArticle]:
         ordered = sorted(candidates, key=lambda item: item.components["C"], reverse=True)
@@ -171,3 +261,30 @@ class RecommendationService:
     @staticmethod
     def _with_reason(item: ScoredArticle, code: str, text: str) -> ScoredArticle:
         return ScoredArticle(item.article, item.score, item.components, item.topics, code, text)
+
+
+def build_profile_vector(
+    embedder: Embedder,
+    topic_weights: dict[str, float],
+    selected_sub_interests: list[str] | None = None,
+    interest_tags: list[str] | None = None,
+) -> list[float]:
+    texts: list[str] = []
+    weights: list[float] = []
+    descriptions = {topic.name: topic.description for topic in TOPICS}
+    for topic, weight in topic_weights.items():
+        texts.append(descriptions.get(topic, topic))
+        weights.append(float(weight))
+    for value in selected_sub_interests or []:
+        texts.append(value)
+        weights.append(2.0)
+    for value in interest_tags or []:
+        texts.append(value)
+        weights.append(2.0)
+    if not texts:
+        return [0.0] * embedder.dimension
+    vectors = embedder.embed_texts(texts)
+    average = [sum(weight * vector[index] for weight, vector in zip(weights, vectors))
+               for index in range(len(vectors[0]))]
+    norm = math.sqrt(sum(value * value for value in average))
+    return [value / norm for value in average] if norm else average
