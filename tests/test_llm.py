@@ -142,7 +142,15 @@ def test_failure_logs_safe_status_and_message(tmp_path: Path) -> None:
     with Database(tmp_path / "llm.db").connect() as db:
         row = db.execute("SELECT error_status, error_message FROM llm_calls").fetchone()
     assert row["error_status"] == 404
-    assert row["error_message"] == "HTTP 404"
+    assert row["error_message"] == "no"
+
+
+def test_unavailable_exposes_safe_status(tmp_path: Path) -> None:
+    service = client(tmp_path, FakeClient([response({}, 401)]), ["groq"])
+    with pytest.raises(LLMUnavailable) as raised:
+        run(service.generate_structured("test", "system", [], "say", InterestSummary))
+    assert raised.value.status == 401
+    assert raised.value.error_message == "{}"
 
 
 def test_log_filter_redacts_secrets() -> None:

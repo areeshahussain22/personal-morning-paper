@@ -36,7 +36,7 @@ async def llm_check(provider_name: str | None = None) -> int:
             "gemini": settings.gemini_api_key,
             "groq": settings.groq_api_key,
             "openrouter": settings.openrouter_api_key,
-            "ollama": "local",
+            "ollama": None,
         }.get(provider_name)
         model = {
             "gemini": settings.gemini_model,
@@ -75,7 +75,8 @@ async def llm_check(provider_name: str | None = None) -> int:
         return 0
     except LLMUnavailable as exc:
         print("status=unavailable")
-        print("error=provider unavailable")
+        print(f"http_status={exc.status if exc.status is not None else 'none'}")
+        print(f"error={exc.error_message[:200]}")
         return 1
 
 

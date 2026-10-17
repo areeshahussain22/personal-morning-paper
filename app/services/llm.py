@@ -14,6 +14,7 @@ from typing import Any, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from app.core.logging import redact_log_value
 from app.models.llm import LLMMetadata, LLMResult
 from app.repositories.database import Database, to_db_time, utc_now
 
@@ -22,7 +23,10 @@ SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 
 class LLMUnavailable(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None, error_message: str | None = None):
+        super().__init__(message)
+        self.status = status
+        self.error_message = error_message or "provider unavailable"
 
 
 def _error_details(exc: Exception) -> tuple[int | None, str]:
@@ -30,7 +34,16 @@ def _error_details(exc: Exception) -> tuple[int | None, str]:
     if isinstance(exc, httpx.RequestError):
         message = "connection error"
     elif status is not None:
-        message = f"HTTP {status}"
+        response = getattr(exc, "response", None)
+        detail = ""
+        if response is not None:
+            try:
+                payload = response.json()
+                detail = str(payload.get("error", payload)) if isinstance(payload, dict) else str(payload)
+            except ValueError:
+                detail = response.text
+        message = redact_log_value(detail).replace("\r", " ").replace("\n", " ")[:200]
+        message = message or f"HTTP {status}"
     else:
         message = type(exc).__name__
     return status, message[:200]
@@ -149,7 +162,12 @@ class LLMClient:
                     purpose,
                     type(exc).__name__,
                 )
-        raise LLMUnavailable(f"No configured LLM provider completed purpose={purpose}: {last_error}")
+        status, message = _error_details(last_error) if last_error else (None, "provider unavailable")
+        raise LLMUnavailable(
+            f"No configured LLM provider completed purpose={purpose}",
+            status,
+            message,
+        )
 
     async def _call_provider(
         self, provider: ProviderConfig, purpose: str, system_prompt: str,
