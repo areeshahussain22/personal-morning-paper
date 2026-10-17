@@ -58,6 +58,7 @@ class RecommendationService:
         self, database: Database, freshness_hours: int = 48, topic_threshold: float = 0.12,
         dimensions: int = 64, embedder: Embedder | None = None,
         cluster_similarity_threshold: float = 0.72, cluster_window_hours: int = 36,
+        topic_secondary_margin: float = 0.04,
     ):
         self.database = database
         self.freshness_hours = freshness_hours
@@ -66,6 +67,7 @@ class RecommendationService:
         self.embedder = embedder
         self.cluster_similarity_threshold = cluster_similarity_threshold
         self.cluster_window_hours = cluster_window_hours
+        self.topic_secondary_margin = topic_secondary_margin
         self.database.initialize()
 
     def _prepare_article(self, row: dict) -> tuple[dict, list[str], list[float]]:
@@ -92,7 +94,9 @@ class RecommendationService:
             return article, [], []
         text = f"{article['title']} {article.get('description') or ''}"
         embedding = self.embedder.embed_text(text)
-        assigned = assign_topics_with_embedder(text, self.topic_threshold, 2, self.embedder)
+        assigned = assign_topics_with_embedder(
+            text, self.topic_threshold, 2, self.embedder, self.topic_secondary_margin
+        )
         topics = [topic for topic, _ in assigned]
         with self.database.connect() as db:
             db.execute("DELETE FROM article_topics WHERE article_id = ?", (article["article_id"],))
@@ -254,9 +258,15 @@ class RecommendationService:
                 [title_similarity(item.article["title"], other.article["title"]) for other in selected] or [0.0]
             ))
             topic = best.topics[0] if best.topics else best.article["topic"]
-            if topic_counts.get(topic, 0) >= max(1, math.ceil((len(selected) + count) * 0.4)) and len(candidates) > 1:
-                candidates.remove(best)
-                continue
+            cap = max(1, math.ceil((len(selected) + count) * 0.4))
+            under_cap = [
+                item for item in candidates
+                if topic_counts.get(item.topics[0] if item.topics else item.article["topic"], 0) < cap
+            ]
+            if under_cap:
+                best = max(under_cap, key=lambda item: item.score - 0.3 * max(
+                    [title_similarity(item.article["title"], other.article["title"]) for other in selected] or [0.0]
+                ))
             selected.append(best)
             topic_counts[topic] = topic_counts.get(topic, 0) + 1
             candidates.remove(best)

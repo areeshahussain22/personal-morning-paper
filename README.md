@@ -251,6 +251,11 @@ python -m pytest -m slow tests/test_recommendation.py
 
 The real-model test is registered as `slow` and excluded from the default
 suite by `pytest.ini`; run it explicitly with the command above.
+
+For the current `all-MiniLM-L6-v2` calibration, semantic topic assignment
+uses `REAL_TOPIC_MATCH_THRESHOLD=0.10` and permits a second topic only when it
+is within `TOPIC_SECONDARY_MARGIN=0.04` of the best score. These values are
+per-embedder settings and should be recalibrated when the model changes.
 ```
 
 ## LLM client layer
@@ -330,7 +335,9 @@ Run the diagnostic command without printing secrets or generated content:
 python -m app.cli llm-check
 ```
 
-It prints only the answering provider, model, latency, and attempt count.
+Use `--provider gemini`, `--provider groq`, `--provider openrouter`, or
+`--provider ollama` to diagnose one provider. The command prints only whether
+a key is configured, the model, HTTP status, and a short redacted error.
 
 ## Edition generation
 

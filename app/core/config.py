@@ -20,7 +20,8 @@ class Settings:
     cluster_window_hours: int = 36
     cluster_similarity_threshold: float = 0.72
     hashed_cluster_similarity_threshold: float = 0.45
-    real_topic_match_threshold: float = 0.45
+    real_topic_match_threshold: float = 0.10
+    topic_secondary_margin: float = 0.04
     llm_provider_order: tuple[str, ...] = ("gemini", "groq", "openrouter", "ollama")
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 2
@@ -70,7 +71,8 @@ def get_settings() -> Settings:
         cluster_window_hours=int(os.getenv("CLUSTER_WINDOW_HOURS", "36")),
         cluster_similarity_threshold=float(os.getenv("CLUSTER_SIMILARITY_THRESHOLD", "0.72")),
         hashed_cluster_similarity_threshold=float(os.getenv("HASHED_CLUSTER_SIMILARITY_THRESHOLD", "0.45")),
-        real_topic_match_threshold=float(os.getenv("REAL_TOPIC_MATCH_THRESHOLD", "0.45")),
+        real_topic_match_threshold=float(os.getenv("REAL_TOPIC_MATCH_THRESHOLD", "0.10")),
+        topic_secondary_margin=float(os.getenv("TOPIC_SECONDARY_MARGIN", "0.04")),
         llm_provider_order=tuple(
             item.strip() for item in os.getenv(
                 "LLM_PROVIDER_ORDER", "gemini,groq,openrouter,ollama"

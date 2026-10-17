@@ -14,12 +14,12 @@ class Topic:
 
 
 TOPICS: tuple[Topic, ...] = (
-    Topic("technology_ai", "Artificial intelligence, software, and technology", ("technology", "software", "ai", "artificial", "computer", "chip", "robot")),
-    Topic("science_research", "Scientific discoveries and research", ("science", "research", "study", "space", "nasa", "climate", "health")),
-    Topic("world", "International affairs, politics, and global events", ("world", "global", "international", "government", "war", "election", "president")),
-    Topic("business_markets", "Business, finance, markets, and the economy", ("business", "market", "finance", "economy", "company", "stock", "trade")),
-    Topic("sports", "Sport competitions, teams, and athletes", ("sport", "football", "soccer", "basketball", "tennis", "olympic", "team")),
-    Topic("health", "Medicine, health, and wellbeing", ("health", "medical", "medicine", "doctor", "disease", "wellbeing", "fitness")),
+    Topic("technology_ai", "Technology and artificial intelligence: software, computing, chips, robotics, cybersecurity, startups, digital products, machine learning, and AI regulation.", ("technology", "software", "ai", "artificial", "computer", "chip", "robot")),
+    Topic("science_research", "Science and research: discoveries, experiments, space missions, astronomy, climate, physics, biology, environment, laboratories, and peer-reviewed studies.", ("science", "research", "study", "space", "nasa", "climate", "health")),
+    Topic("world", "World news and international affairs: countries, diplomacy, geopolitics, conflict, elections, governments, presidents, global events, and public policy.", ("world", "global", "international", "government", "war", "election", "president")),
+    Topic("business_markets", "Business and markets: companies, finance, investing, stocks, trade, the economy, jobs, banking, earnings, prices, and markets.", ("business", "market", "finance", "economy", "company", "stock", "trade")),
+    Topic("sports", "Sports news: competitions, leagues, teams, athletes, football, soccer, basketball, tennis, motorsport, Formula 1, and Olympic events.", ("sport", "football", "soccer", "basketball", "tennis", "olympic", "team")),
+    Topic("health", "Health and medicine: doctors, hospitals, disease, treatment, public health, nutrition, fitness, wellbeing, medical research, and healthcare policy.", ("health", "medical", "medicine", "doctor", "disease", "wellbeing", "fitness")),
 )
 
 
@@ -32,6 +32,7 @@ def assign_topics_with_embedder(
     threshold: float = 0.12,
     limit: int = 2,
     embedder: Embedder | None = None,
+    secondary_margin: float = 0.04,
 ) -> list[tuple[str, float]]:
     if embedder is not None and embedder.name != "hashed":
         article_vector = embedder.embed_text(text)
@@ -40,10 +41,14 @@ def assign_topics_with_embedder(
             (topic.name, cosine_similarity(article_vector, vector, embedder.name, embedder.name))
             for topic, vector in zip(TOPICS, topic_vectors)
         ]
-        return sorted(
+        ranked = sorted(
             [(name, confidence) for name, confidence in matches if confidence >= threshold],
             key=lambda item: (-item[1], item[0]),
-        )[:limit]
+        )
+        if not ranked:
+            return []
+        first_score = ranked[0][1]
+        return [item for item in ranked[:limit] if item[1] >= first_score - secondary_margin]
     tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
     matches = []
     for topic in TOPICS:
