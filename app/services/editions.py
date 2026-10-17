@@ -184,6 +184,15 @@ class EditionService:
                 layout_provider, layout_model = result.metadata.provider, result.metadata.model
             except (LLMUnavailable, LLMValidationError, ValueError):
                 pass
+        selected_by_id = {item.article["article_id"]: (group, item) for group, item in selected}
+        ordered_ids = [
+            article_id
+            for section in layout["sections"]
+            for article_id in section["article_ids"]
+        ]
+        if layout["lead_id"] in ordered_ids:
+            ordered_ids.remove(layout["lead_id"])
+            ordered_ids.insert(0, layout["lead_id"])
         items = []
         position = 0
         section_by_id = {
@@ -191,8 +200,8 @@ class EditionService:
             for section in layout["sections"]
             for article_id in section["article_ids"]
         }
-        for group, item in selected:
-            article_id = item.article["article_id"]
+        for article_id in ordered_ids:
+            group, item = selected_by_id[article_id]
             position += 1
             row = rows[article_id]
             items.append(

@@ -24,6 +24,7 @@ def test_no_llm_edition_is_complete_and_positions_are_sequential(tmp_path: Path)
     assert result["layout_source"] == "code"
     assert [item["position"] for item in result["items"]] == list(range(1, len(result["items"]) + 1))
     assert result["items"][0]["position"] == 1
+    assert result["items"][0]["article_id"] == result["lead_id"]
     assert all(item["summary"] for item in result["items"])
     with database.connect() as db:
         assert db.execute("SELECT COUNT(*) FROM edition_items").fetchone()[0] == len(result["items"])
