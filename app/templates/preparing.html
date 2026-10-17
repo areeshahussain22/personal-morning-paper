@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Preparing your paper{% endblock %}
+{% block content %}
+<section class="card preparing" aria-live="polite">
+  <p class="kicker">First edition</p><h1>Preparing your paper</h1>
+  <div class="skeleton"></div><div class="skeleton short"></div>
+  <p id="stage">Joining the newsroom...</p><p id="status-error" class="error"></p>
+  <button id="retry" class="primary hidden">Try again</button>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/preparing.js"></script>{% endblock %}

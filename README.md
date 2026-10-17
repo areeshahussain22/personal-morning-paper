@@ -367,6 +367,38 @@ GET  /api/users/{user_id}/editions/{YYYY-MM-DD}
 `generate-all` iterates over every stored user and supports `--no-llm` and
 `--force`. Edition generation is idempotent for a user/date unless forced.
 
+## Onboarding and identity
+
+The local web UI uses Jinja2 templates, vanilla JavaScript, and local static
+assets only; there is no frontend build step or CDN dependency. Open `/` to
+walk through:
+
+1. Welcome
+2. Topic and sub-interest selection
+3. Specific-interest tags, generated with `OnboardingTags` or a deterministic
+   lowercase stop-word fallback
+4. Reading preferences: depth, 10-20 stories, surprise level, timezone,
+   delivery time, and optional display name
+
+Headline reactions are intentionally left as a marked future extension point.
+Completing onboarding creates the user, stores the initial weighted baseline
+(topic 3, sub-interest 2, tag 2), initializes long/short vectors with the
+configured embedder, maps surprise to exploration floors (low `0.10`, medium
+`0.15`, high `0.25`), and starts the first edition in the background.
+
+The browser receives a signed, HttpOnly, SameSite=Lax session cookie containing
+only the user identity. `GET /api/me` resolves the current reader. In
+development a local fallback session secret is used; set `SESSION_SECRET` and
+use `ENVIRONMENT=production` so startup fails if a secret is missing outside
+development. This identity model has no passwords or account recovery and is
+intended for the local/demo phase.
+
+The preparing page polls
+`GET /api/users/{user_id}/editions/{YYYY-MM-DD}/status` and displays queued,
+running stage names, ready, or failed with a retry path. Profile settings are
+stored in `user_settings` and the recommendation engine applies each user's
+edition size and exploration floor.
+
 ## Run the application
 
 ```powershell

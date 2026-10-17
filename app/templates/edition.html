@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Your morning paper{% endblock %}
+{% block content %}
+<section id="edition" class="edition card"><p class="kicker">Today's paper</p><h1>Loading your edition...</h1></section>
+{% endblock %}
+{% block scripts %}<script src="/static/edition.js" data-date="{{ edition_date }}"></script>{% endblock %}
