@@ -162,7 +162,6 @@ def test_profile_and_recommendation_api_validation(tmp_path: Path, monkeypatch) 
 
 
 @pytest.mark.slow
-@pytest.mark.skip(reason="Real model integration is opt-in; run explicitly after model setup.")
 def test_real_model_semantic_similarity() -> None:
     pytest.importorskip("sentence_transformers")
     embedder = create_embedder("sentence_transformer")

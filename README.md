@@ -247,7 +247,10 @@ The slow semantic integration test is skipped by default because it downloads
 model weights. Run it explicitly after installation with:
 
 ```powershell
-python -m pytest tests/test_recommendation.py -m slow
+python -m pytest -m slow tests/test_recommendation.py
+
+The real-model test is registered as `slow` and excluded from the default
+suite by `pytest.ini`; run it explicitly with the command above.
 ```
 
 ## LLM client layer
