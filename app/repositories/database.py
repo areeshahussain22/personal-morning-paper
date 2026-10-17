@@ -113,6 +113,14 @@ class Database:
                     stats_json TEXT NOT NULL DEFAULT '{}',
                     UNIQUE(job, run_key)
                 );
+                CREATE TABLE IF NOT EXISTS learning_snapshots (
+                    persona TEXT NOT NULL,
+                    day TEXT NOT NULL,
+                    topic_weights_json TEXT NOT NULL,
+                    topic_stats_json TEXT NOT NULL,
+                    metrics_json TEXT NOT NULL,
+                    PRIMARY KEY (persona, day)
+                );
                 CREATE INDEX IF NOT EXISTS idx_job_runs_started ON job_runs(started_at);
                 CREATE TABLE IF NOT EXISTS user_topic_preferences (
                     user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -263,6 +271,7 @@ class Database:
             self._add_column_if_missing(connection, "editions", "pdf_status", "TEXT")
             self._add_column_if_missing(connection, "editions", "pdf_path", "TEXT")
             self._add_column_if_missing(connection, "editions", "pdf_rendered_at", "TEXT")
+            self._add_column_if_missing(connection, "editions", "metrics_json", "TEXT")
             self._add_column_if_missing(connection, "link_tokens", "token_source", "TEXT NOT NULL DEFAULT 'web'")
             self._add_column_if_missing(connection, "user_topic_preferences", "updated_at", "TEXT")
             self._add_column_if_missing(connection, "user_source_preferences", "updated_at", "TEXT")

@@ -1,0 +1,28 @@
+personas:
+  - name: featured
+    onboarding:
+      topics: [technology_ai, sports, world]
+      sub_interests: [artificial intelligence, motorsport]
+      tags: [AI, Formula 1]
+      preferences: {depth: standard, edition_size: 10, timezone: UTC}
+    true_affinities: {technology_ai: 0.8, sports: 0.7, world: 0.05}
+    llm_editor: false
+    seed: 101
+  - name: health_science
+    onboarding:
+      topics: [health, science_research]
+      sub_interests: [public health, space]
+      tags: [medicine, research]
+      preferences: {depth: standard, edition_size: 10, timezone: UTC}
+    true_affinities: {health: 0.75, science_research: 0.7}
+    llm_editor: false
+    seed: 202
+  - name: markets_world
+    onboarding:
+      topics: [business_markets, world]
+      sub_interests: [economy, diplomacy]
+      tags: [markets, geopolitics]
+      preferences: {depth: standard, edition_size: 10, timezone: UTC}
+    true_affinities: {business_markets: 0.78, world: 0.68}
+    llm_editor: false
+    seed: 303

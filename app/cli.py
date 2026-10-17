@@ -5,6 +5,7 @@ import asyncio
 import json
 import sys
 from datetime import date
+from pathlib import Path
 
 from app.core.config import get_settings
 from app.models.llm import InterestSummary
@@ -14,6 +15,7 @@ from app.services.editions import EditionService, _all_items
 from app.services.recommendation import RecommendationService
 from app.services.learning import LearningProcessor
 from app.services.interest_summary import generate_interest_summary
+from app.services.simulation import SimulationRunner
 
 
 def build_client() -> LLMClient:
@@ -150,15 +152,31 @@ async def generate_summary(user_id: str, force: bool) -> int:
     return 0 if result else 1
 
 
+def simulate(days: int, persona: str, seed: int, cycle: bool, llm_featured: bool) -> int:
+    settings = get_settings()
+    result = SimulationRunner(Database(settings.database_path), Path("out/sim")).run(
+        days, persona, seed, cycle
+    )
+    print(f"days={len(result['days'])}")
+    print(f"cycle={result['cycle']}")
+    print(f"llm_calls={result['llm_calls'] if llm_featured else 0}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary", "scheduler", "run-once", "status"])
+    parser.add_argument("command", choices=["llm-check", "generate-edition", "generate-all", "process-events", "generate-summary", "scheduler", "run-once", "status", "simulate"])
     parser.add_argument("--user-id")
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--no-llm", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--provider", choices=["gemini", "groq", "openrouter", "ollama"])
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--days", type=int, default=14)
+    parser.add_argument("--persona", default="all")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--cycle", action="store_true")
+    parser.add_argument("--llm-featured", action="store_true")
     args = parser.parse_args()
     if args.command == "llm-check":
         code = asyncio.run(llm_check(args.provider))
@@ -195,6 +213,8 @@ def main() -> None:
         for run in runner.database.read_job_runs():
             print(json.dumps(run))
         code = 0
+    elif args.command == "simulate":
+        code = simulate(args.days, args.persona, args.seed, args.cycle, args.llm_featured)
     else:
         code = asyncio.run(generate_all(not args.no_llm, args.force, args.date))
     raise SystemExit(code)

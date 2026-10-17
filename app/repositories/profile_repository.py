@@ -485,8 +485,8 @@ class ProfileRepository:
             db.execute(
                 """INSERT INTO editions
                    (edition_id, user_id, created_at, result_json, edition_date, layout_source,
-                    layout_provider, layout_model, stage_timings_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    layout_provider, layout_model, stage_timings_json, metrics_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     edition_id,
                     user_id,
@@ -497,6 +497,7 @@ class ProfileRepository:
                     layout_provider,
                     layout_model,
                     json.dumps(stage_timings),
+                    json.dumps(result.get("metrics", {})),
                 ),
             )
             for item in items:
