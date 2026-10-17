@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from app.models.llm import ArticleSummary, InterestSummary
+from app.models.llm import ArticleSummary, ArticleSummaryBatch, InterestSummary
 from app.repositories.database import Database
 from app.services.llm import (
     LLMClient,
@@ -16,6 +16,7 @@ from app.services.llm import (
     wrap_untrusted_blocks,
 )
 from app.core.logging import SensitiveDataFilter
+from app.services.llm import _gemini_schema
 import logging
 
 
@@ -132,6 +133,14 @@ def test_gemini_key_is_sent_in_header_not_query(tmp_path: Path) -> None:
     run(service.generate_structured("test", "system", [], "say", InterestSummary))
     assert "?" not in fake.calls[0]["url"]
     assert fake.calls[0]["headers"]["x-goog-api-key"] == "secret"
+
+
+def test_gemini_schema_expands_nested_references() -> None:
+    converted = _gemini_schema(ArticleSummaryBatch.model_json_schema())
+    serialized = json.dumps(converted)
+    assert "$defs" not in serialized
+    assert "$ref" not in serialized
+    assert converted["properties"]["items"]["items"]["properties"]["id"]["type"] == "string"
 
 
 def test_failure_logs_safe_status_and_message(tmp_path: Path) -> None:
