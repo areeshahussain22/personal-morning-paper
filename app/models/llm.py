@@ -37,6 +37,11 @@ class ArticleSummary(BaseModel):
     _safe_summary = field_validator("summary")(reject_markup_or_url)
 
 
+class ArticleSummaryBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[ArticleSummary] = Field(min_length=1, max_length=20)
+
+
 class EditorSection(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=60)

@@ -135,6 +135,7 @@ class LLMClient:
         schema_json = schema.model_json_schema()
         attempts = 0
         repair_error: str | None = None
+        repaired = False
         started = time.perf_counter()
         async with self.semaphore:
             for attempt in range(self.max_retries + 1):
@@ -154,8 +155,9 @@ class LLMClient:
                     )
                 except ValidationError as exc:
                     repair_error = str(exc)
-                    if attempt == self.max_retries:
+                    if repaired:
                         break
+                    repaired = True
                     prompt = f"{prompt}\nVALIDATION ERROR TO REPAIR:\n{repair_error}"
                     continue
                 except httpx.HTTPStatusError as exc:
@@ -210,6 +212,10 @@ class LLMClient:
             returned_ids = set()
             if hasattr(value, "id"):
                 returned_ids.add(value.id)
+            if hasattr(value, "items"):
+                for item in value.items:
+                    if hasattr(item, "id"):
+                        returned_ids.add(item.id)
             if hasattr(value, "lead_id"):
                 returned_ids.add(value.lead_id)
             if hasattr(value, "sections"):
