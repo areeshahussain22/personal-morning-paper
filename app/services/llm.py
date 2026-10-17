@@ -61,18 +61,25 @@ class ProviderConfig:
     base_url: str
 
 
-def _gemini_schema(schema: dict) -> dict:
+def _gemini_schema(schema: dict, definitions: dict | None = None) -> dict:
+    definitions = definitions or schema.get("$defs", {})
+    if "$ref" in schema:
+        definition = definitions.get(schema["$ref"].rsplit("/", 1)[-1], {})
+        return _gemini_schema(definition, definitions)
     unsupported = {"title", "additionalProperties", "minLength", "maxLength"}
     return {
         key: (
-            [_gemini_schema(item) if isinstance(item, dict) else item for item in value]
+            [
+                _gemini_schema(item, definitions) if isinstance(item, dict) else item
+                for item in value
+            ]
             if isinstance(value, list)
-            else _gemini_schema(value)
+            else _gemini_schema(value, definitions)
             if isinstance(value, dict)
             else value
         )
         for key, value in schema.items()
-        if key not in unsupported
+        if key not in unsupported and key not in {"$defs", "$ref"}
     }
 
 
