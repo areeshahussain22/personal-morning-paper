@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.models.llm import InterestSummary
 from app.repositories.database import Database
 from app.services.llm import LLMClient, ProviderConfig, LLMUnavailable
-from app.services.editions import EditionService
+from app.services.editions import EditionService, _all_items
 from app.services.recommendation import RecommendationService
 
 
@@ -78,6 +78,29 @@ async def generate_all(use_llm: bool, force: bool) -> int:
     database = Database(settings.database_path)
     with database.connect() as db:
         user_ids = [row["user_id"] for row in db.execute("SELECT user_id FROM users")]
+    service = EditionService(
+        database,
+        RecommendationService(
+            database,
+            freshness_hours=settings.freshness_hours,
+            topic_threshold=settings.real_topic_match_threshold
+            if settings.embedding_backend == "sentence_transformer"
+            else settings.topic_match_threshold,
+            dimensions=settings.embedding_dimensions,
+        ),
+        build_client() if use_llm else None,
+    )
+    selected = []
+    for user_id in user_ids:
+        profile = service.profiles.get_preferences(user_id)
+        if profile is not None:
+            selected.extend(item for _, item in _all_items(service.recommendation.preview(user_id, profile)))
+    if selected:
+        if service.llm_client is not None:
+            async with service.llm_client:
+                await service.ensure_summaries(selected)
+        else:
+            await service.ensure_summaries(selected)
     for user_id in user_ids:
         await generate_edition(user_id, date.today().isoformat(), use_llm, force)
     return 0

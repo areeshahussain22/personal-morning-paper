@@ -35,7 +35,23 @@ class Settings:
     ollama_model: str = "llama3.2"
 
 
+def _load_local_env() -> None:
+    env_path = Path(".env")
+    if not env_path.is_file():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if value[:1] in {"'", '"'} and value[-1:] == value[:1]:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
 def get_settings() -> Settings:
+    _load_local_env()
     return Settings(
         database_path=Path(
             os.getenv("DATABASE_PATH", "data/personal_morning_paper.db")
