@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -205,6 +206,73 @@ class ProfileRepository:
             }
         )
         return result
+
+    def render_edition(self, user_id: str, edition_date: str) -> dict | None:
+        result = self.edition_for_date(user_id, edition_date)
+        if result is None:
+            return None
+        ids = [item["article_id"] for item in result.get("items", [])]
+        if not ids:
+            result["render_items"] = []
+            return result
+        marks = ",".join("?" for _ in ids)
+        with self.database.connect() as db:
+            rows = db.execute(
+                f"""SELECT a.article_id, a.source_id, a.source_name, a.original_url,
+                           a.image_url, a.published_at, s.reliability_score, s.is_paywalled
+                    FROM articles a JOIN sources s ON s.source_id=a.source_id
+                    WHERE a.article_id IN ({marks})""", ids
+            ).fetchall()
+            covered = db.execute(
+                f"""SELECT c1.article_id, a2.source_name
+                    FROM article_clusters c1
+                    JOIN article_clusters c2 ON c1.cluster_id=c2.cluster_id
+                    JOIN articles a2 ON a2.article_id=c2.article_id
+                    WHERE c1.article_id IN ({marks}) AND c2.article_id != c1.article_id""", ids
+            ).fetchall()
+        details = {row["article_id"]: dict(row) for row in rows}
+        outlets: dict[str, list[str]] = {}
+        for row in covered:
+            outlets.setdefault(row["article_id"], []).append(row["source_name"])
+        render_items = []
+        for item in result["items"]:
+            detail = details.get(item["article_id"], {})
+            enriched = {**item, **detail}
+            enriched["other_outlets"] = sorted(set(outlets.get(item["article_id"], [])))
+            score = detail.get("reliability_score", 0)
+            enriched["reliability_label"] = "high" if score >= 0.85 else "medium" if score >= 0.65 else "lower"
+            enriched["out_token"] = self.get_or_create_token(
+                user_id, item["article_id"], result["edition_id"], item["position"], detail.get("source_id", "")
+            )
+            render_items.append(enriched)
+        result["render_items"] = render_items
+        return result
+
+    def get_or_create_token(self, user_id: str, article_id: str, edition_id: str, position: int, source_id: str) -> str:
+        with self.database.connect() as db:
+            row = db.execute(
+                """SELECT token FROM link_tokens
+                   WHERE user_id=? AND article_id=? AND edition_id=? AND position=? AND source_id=?""",
+                (user_id, article_id, edition_id, position, source_id),
+            ).fetchone()
+            if row:
+                return row["token"]
+            token = secrets.token_urlsafe(32)
+            db.execute(
+                """INSERT INTO link_tokens
+                   (token,user_id,article_id,edition_id,position,source_id,created_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (token, user_id, article_id, edition_id, position, source_id, to_db_time(utc_now())),
+            )
+            return token
+
+    def link_target(self, token: str) -> str | None:
+        with self.database.connect() as db:
+            row = db.execute(
+                "SELECT a.original_url FROM link_tokens t JOIN articles a ON a.article_id=t.article_id WHERE t.token=?",
+                (token,),
+            ).fetchone()
+        return row["original_url"] if row else None
 
     def list_editions(self, user_id: str) -> list[dict]:
         with self.database.connect() as db:

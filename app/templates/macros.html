@@ -1,0 +1,24 @@
+{% macro story_card(item, compact=false) -%}
+<article class="story-card{% if compact %} story-card--compact{% endif %}">
+  {% if item.image_url %}
+  <a class="story-image" href="/out/{{ item.out_token }}" target="_blank" rel="noopener noreferrer">
+    <img src="{{ item.image_url }}" alt="" loading="lazy" onerror="this.parentElement.classList.add('image-fallback'); this.remove()">
+  </a>
+  {% else %}<div class="story-image image-fallback" aria-hidden="true"><span>Personal Morning Paper</span></div>{% endif %}
+  <div class="story-content">
+    <p class="story-meta">{{ item.source_name }} · {{ item.published_at|relative_time }}
+      <span class="reliability reliability-{{ item.reliability_label }}">{{ item.reliability_label }}</span>
+      {% if item.is_paywalled %}<span class="badge">Paywalled</span>{% endif %}
+    </p>
+    <h3><a href="/out/{{ item.out_token }}" target="_blank" rel="noopener noreferrer">{{ item.headline }}</a></h3>
+    <p>{{ item.summary }}</p>
+    {% if item.other_outlets %}<p class="coverage">Also covered by {{ item.other_outlets|length }} outlet{% if item.other_outlets|length != 1 %}s{% endif %}: {{ item.other_outlets|join(", ") }}</p>{% endif %}
+    <p class="reason">{{ item.reason_text }}</p>
+    <details class="why-panel"><summary>Why this?</summary>
+      {% for key, value in item.score_components.items() %}
+      <div class="score-row"><span>{{ key }}</span><span class="score-bar"><i style="width: {{ (value|float * 100)|round|int }}%"></i></span></div>
+      {% endfor %}
+    </details>
+  </div>
+</article>
+{%- endmacro %}

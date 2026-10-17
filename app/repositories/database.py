@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -191,6 +192,17 @@ class Database:
                     response_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS link_tokens (
+                    token TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    article_id TEXT NOT NULL REFERENCES articles(article_id),
+                    edition_id TEXT NOT NULL REFERENCES editions(edition_id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    source_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(user_id, article_id, edition_id, position, source_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_link_tokens_lookup ON link_tokens(token);
                 """
             )
             self._add_column_if_missing(connection, "users", "vector_embedder", "TEXT")

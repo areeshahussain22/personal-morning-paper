@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Archive · Personal Morning Paper{% endblock %}
+{% block content %}
+<header class="edition-heading"><p class="kicker">Your archive</p><h1>Previous papers</h1></header>
+<nav class="archive-nav" aria-label="Archive navigation">{% if next_edition %}<a href="/edition/{{ next_edition }}">← Newer</a>{% endif %}{% if previous_edition %}<a href="/edition/{{ previous_edition }}">Older →</a>{% endif %}</nav>
+<section class="archive-list">{% for item in editions %}<article class="archive-row"><div><p class="kicker">{{ item.edition_date }}</p><h2><a href="/edition/{{ item.edition_date }}">{{ item.lead_headline }}</a></h2></div><p>{{ item.story_count }} stories · {{ item.layout_source or "code" }} layout</p></article>{% else %}<section class="empty-state card"><h2>No previous editions yet.</h2><p>Your archive will appear after your first paper is generated.</p></section>{% endfor %}</section>
+{% endblock %}
